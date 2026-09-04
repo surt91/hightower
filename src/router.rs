@@ -423,3 +423,85 @@ pub(crate) fn escape_step(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::Bounds;
+
+    fn p(x: i64, y: i64) -> Point {
+        Point::new(x, y)
+    }
+
+    #[test]
+    fn used_line_rule_compares_span_overlap_not_just_fixed_coordinate() {
+        let mut net = Network::new(NetId::A, p(5, 5));
+        let mut trace = Trace::default();
+        net.add_line(Segment::vertical(5, 0, 10), 0, &mut trace);
+        // same x, disjoint span (separated by an obstacle): a different line
+        assert!(!net.is_used(&Segment::vertical(5, 12, 20)));
+        // touching at an endpoint counts as overlapping
+        assert!(net.is_used(&Segment::vertical(5, 10, 20)));
+        // a zero-length line inside the span is used, one outside is not
+        assert!(net.is_used(&Segment::vertical(5, 3, 3)));
+        assert!(!net.is_used(&Segment::vertical(5, 11, 11)));
+        // other orientation or other fixed coordinate: never used
+        assert!(!net.is_used(&Segment::horizontal(5, 0, 10)));
+        assert!(!net.is_used(&Segment::vertical(6, 0, 10)));
+    }
+
+    #[test]
+    fn chain_follows_parent_pointers_to_the_root() {
+        let mut net = Network::new(NetId::B, p(0, 0));
+        let mut trace = Trace::default();
+        let l0 = net.add_line(Segment::horizontal(0, 0, 10), 0, &mut trace);
+        let e1 = net.push_point(p(4, 0), Some(0));
+        let l1 = net.add_line(Segment::vertical(4, 0, 10), e1, &mut trace);
+        let e2 = net.push_point(p(4, 7), Some(e1));
+        let l2 = net.add_line(Segment::horizontal(7, 0, 10), e2, &mut trace);
+        assert_eq!(
+            net.chain(l2, p(9, 7)),
+            vec![p(9, 7), p(4, 7), p(4, 0), p(0, 0)]
+        );
+        assert_eq!(net.chain(l1, p(4, 2)), vec![p(4, 2), p(4, 0), p(0, 0)]);
+        assert_eq!(net.chain(l0, p(1, 0)), vec![p(1, 0), p(0, 0)]);
+        assert_eq!(net.object_point(), (e2, p(4, 7)));
+    }
+
+    #[test]
+    fn adjacent_endpoints_are_joined_directly() {
+        let o = ObstacleSet::new(Bounds::new(p(0, 0), p(10, 10)));
+        assert_eq!(route(&o, p(3, 3), p(4, 3)), Some(vec![p(3, 3), p(4, 3)]));
+        assert_eq!(route(&o, p(3, 3), p(3, 2)), Some(vec![p(3, 3), p(3, 2)]));
+        // diagonal neighbours: exactly one bend
+        let path = route(&o, p(3, 3), p(4, 4)).unwrap();
+        assert_eq!(path.len(), 3);
+        assert!(validate_path(&o, p(3, 3), p(4, 4), &path).is_ok());
+    }
+
+    #[test]
+    fn zero_step_limit_is_reported_without_work() {
+        let o = ObstacleSet::new(Bounds::new(p(0, 0), p(10, 10)));
+        let r = route_with(
+            &o,
+            p(1, 1),
+            p(9, 9),
+            &RouterConfig {
+                max_steps: 0,
+                ..Default::default()
+            },
+        );
+        assert_eq!(r.outcome, Outcome::StepLimit);
+        assert_eq!(r.steps, 0);
+        assert!(r.path.is_none());
+        assert!(r.trace.is_empty());
+    }
+
+    #[test]
+    fn degenerate_bounds_only_allow_identical_points() {
+        let o = ObstacleSet::new(Bounds::new(p(3, 3), p(3, 3)));
+        assert_eq!(route(&o, p(3, 3), p(3, 3)), Some(vec![p(3, 3)]));
+        let r = route_with(&o, p(3, 3), p(3, 4), &RouterConfig::default());
+        assert_eq!(r.outcome, Outcome::InvalidInput);
+    }
+}

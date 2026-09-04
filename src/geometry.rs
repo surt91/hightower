@@ -305,4 +305,34 @@ mod tests {
             0
         );
     }
+
+    #[test]
+    fn constructors_normalize_and_distances_do_not_overflow() {
+        assert_eq!(Segment::vertical(1, 9, -3), Segment::vertical(1, -3, 9));
+        assert_eq!(
+            Bounds::new(Point::new(5, -5), Point::new(-5, 5)),
+            Bounds::new(Point::new(-5, -5), Point::new(5, 5))
+        );
+        let far = Point::new(i64::MAX / 2, i64::MIN / 2);
+        let near = Point::new(i64::MIN / 2, i64::MAX / 2);
+        let d = far.dist2(near);
+        assert!(d > 0);
+        assert_eq!(d, 2 * (i64::MAX as i128) * (i64::MAX as i128));
+    }
+
+    #[test]
+    fn perpendicular_touch_at_endpoints_counts_as_contact() {
+        let h = Segment::horizontal(0, 0, 10);
+        // T-touch from above, corner touch, and clear miss by one unit
+        assert!(h.touches(&Segment::vertical(5, 0, 7)));
+        assert!(h.touches(&Segment::vertical(10, -3, 0)));
+        assert!(!h.touches(&Segment::vertical(5, 1, 7)));
+        assert!(!h.touches(&Segment::vertical(11, -3, 3)));
+        assert!(h.contains(Point::new(10, 0)));
+        assert!(!h.contains(Point::new(10, 1)));
+        let b = Bounds::new(Point::new(-2, -2), Point::new(2, 2));
+        assert!(b.contains(Point::new(-2, 2)));
+        assert!(!b.contains(Point::new(-3, 0)));
+        assert_eq!((b.width(), b.height()), (4, 4));
+    }
 }

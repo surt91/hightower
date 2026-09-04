@@ -265,4 +265,84 @@ mod tests {
             .is_ok()
         );
     }
+
+    #[test]
+    fn cleanup_handles_short_and_fully_collinear_paths() {
+        let mut empty: Vec<Point> = vec![];
+        cleanup(&mut empty);
+        assert!(empty.is_empty());
+        let mut one = vec![p(1, 1)];
+        cleanup(&mut one);
+        assert_eq!(one, vec![p(1, 1)]);
+        let mut same = vec![p(1, 1), p(1, 1), p(1, 1)];
+        cleanup(&mut same);
+        assert_eq!(same, vec![p(1, 1)]);
+        let mut line = vec![p(0, 0), p(3, 0), p(9, 0), p(2, 0), p(7, 0)];
+        cleanup(&mut line);
+        assert_eq!(line, vec![p(0, 0), p(7, 0)]);
+        // an exact back-and-forth collapses to a single point
+        let mut back = vec![p(0, 0), p(5, 0), p(0, 0)];
+        cleanup(&mut back);
+        assert_eq!(back, vec![p(0, 0)]);
+    }
+
+    #[test]
+    fn validator_rejects_every_kind_of_defect() {
+        let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(20, 20)));
+        o.add_segment(Segment::vertical(10, 5, 15));
+        o.add_segment(Segment::horizontal(3, 3, 3)); // point obstacle
+        let (a, b) = (p(2, 10), p(18, 10));
+        let err = |path: &[Point]| validate_path(&o, a, b, path).unwrap_err();
+        assert!(err(&[]).contains("start"));
+        assert!(err(&[b, a]).contains("start"));
+        assert!(err(&[a, p(2, 16)]).contains("end"));
+        assert!(err(&[a, p(2, 21), p(18, 21), b]).contains("bounds"));
+        assert!(err(&[a, p(18, 16), b]).contains("diagonal"));
+        assert!(err(&[a, a, p(2, 16), p(18, 16), b]).contains("zero-length"));
+        assert!(err(&[a, p(2, 16), p(2, 17), p(18, 17), b]).contains("collinear"));
+        // crossing the wall, T-touching its end, touching the point obstacle
+        assert!(err(&[a, b]).contains("obstacle"));
+        assert!(err(&[a, p(2, 15), p(18, 15), b]).contains("obstacle"));
+        assert!(err(&[a, p(2, 3), p(18, 3), b]).contains("obstacle"));
+        // one unit of clearance is enough, also along the bounds
+        assert!(validate_path(&o, a, b, &[a, p(2, 16), p(18, 16), b]).is_ok());
+        assert!(validate_path(&o, a, b, &[a, p(2, 20), p(18, 20), b]).is_ok());
+        assert!(validate_path(&o, a, b, &[a, p(2, 4), p(18, 4), b]).is_ok());
+        // single-point paths
+        assert!(validate_path(&o, a, a, &[a]).is_ok());
+        assert!(validate_path(&o, p(3, 3), p(3, 3), &[p(3, 3)]).is_err());
+        assert!(validate_path(&o, p(30, 3), p(30, 3), &[p(30, 3)]).is_err());
+    }
+
+    #[test]
+    fn extension_shortcut_respects_obstacles() {
+        let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(100, 100)));
+        // the same detour as above, but a wall blocks the shortcut at y = 20
+        o.add_segment(Segment::vertical(45, 15, 25));
+        let mut path = vec![
+            p(0, 0),
+            p(0, 20),
+            p(30, 20),
+            p(30, 5),
+            p(60, 5),
+            p(60, 20),
+            p(90, 20),
+        ];
+        let before = path.clone();
+        assert!(!improve_extension(&o, &mut path));
+        assert_eq!(path, before);
+        assert!(validate_path(&o, p(0, 0), p(90, 20), &path).is_ok());
+    }
+
+    #[test]
+    fn probe_respects_obstacles_and_keeps_validity() {
+        let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(100, 100)));
+        // the u-turn bulge from above, but a point obstacle sits at (4, 5)
+        o.add_segment(Segment::horizontal(5, 4, 4));
+        let mut path = vec![p(0, 0), p(10, 0), p(10, 10), p(4, 10), p(4, 20)];
+        assert!(improve_probe(&o, &mut path));
+        // the probe from x = 4 is blocked, the one from x = 5 goes through
+        assert_eq!(path, vec![p(0, 0), p(5, 0), p(5, 10), p(4, 10), p(4, 20)]);
+        assert!(validate_path(&o, p(0, 0), p(4, 20), &path).is_ok());
+    }
 }

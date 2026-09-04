@@ -393,7 +393,7 @@ pub fn render_covers(scene: &Scene, p: Point, style: &Style, show_escape_lines: 
         c.segment(&v, style.net_a, style.line_width * 1.6, "");
     }
     c.dot(p, style.endpoint_fill, style.dot_radius + 1.5);
-    c.text(p, 8.0, -8.0, "p", style.label);
+    c.text(p, 8.0, 16.0, "p", style.label);
     c.finish()
 }
 

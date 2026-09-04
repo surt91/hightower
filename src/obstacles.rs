@@ -356,4 +356,122 @@ mod tests {
         assert_eq!(o.len(), 6);
         assert!(o.is_on_obstacle(Point::new(9, 8)));
     }
+
+    #[test]
+    fn covers_and_escape_lines_with_negative_coordinates() {
+        let mut o = ObstacleSet::new(Bounds::new(Point::new(-50, -50), Point::new(-10, -10)));
+        o.add_segment(Segment::horizontal(-20, -40, -30)); // above p
+        o.add_segment(Segment::vertical(-45, -50, -10)); // left of p, full height
+        let p = Point::new(-35, -35);
+        assert_eq!(o.cover_above(p), Some(Segment::horizontal(-20, -40, -30)));
+        assert_eq!(o.cover_below(p), None);
+        assert_eq!(o.cover_left(p), Some(Segment::vertical(-45, -50, -10)));
+        assert_eq!(o.cover_right(p), None);
+        assert_eq!(
+            o.escape_line(p, Orientation::Vertical),
+            Segment::vertical(-35, -50, -21)
+        );
+        assert_eq!(
+            o.escape_line(p, Orientation::Horizontal),
+            Segment::horizontal(-35, -44, -10)
+        );
+    }
+
+    #[test]
+    fn duplicate_and_overlapping_obstacles_do_not_change_queries() {
+        let mut once = ObstacleSet::new(Bounds::new(Point::new(0, 0), Point::new(50, 50)));
+        let mut twice = once.clone();
+        for s in [
+            Segment::horizontal(30, 10, 40),
+            Segment::vertical(20, 0, 25),
+            Segment::horizontal(30, 15, 45), // overlaps the first
+        ] {
+            once.add_segment(s);
+            twice.add_segment(s);
+            twice.add_segment(s);
+        }
+        assert_eq!(once.len() * 2, twice.len());
+        for x in 0..=50 {
+            for y in 0..=50 {
+                let p = Point::new(x, y);
+                assert_eq!(once.is_on_obstacle(p), twice.is_on_obstacle(p));
+                if once.is_on_obstacle(p) {
+                    continue;
+                }
+                for o in [Orientation::Horizontal, Orientation::Vertical] {
+                    assert_eq!(once.escape_line(p, o), twice.escape_line(p, o), "{p:?}");
+                }
+                // an escape line is always a free segment
+                assert!(once.is_free_segment(&once.escape_line(p, Orientation::Horizontal)));
+                assert!(once.is_free_segment(&once.escape_line(p, Orientation::Vertical)));
+            }
+        }
+    }
+
+    #[test]
+    fn zero_length_obstacles_act_as_covers_and_collinear_blockers() {
+        let mut o = ObstacleSet::new(Bounds::new(Point::new(0, 0), Point::new(10, 10)));
+        o.add_segment(Segment::horizontal(5, 5, 5)); // the point (5,5)
+        assert!(o.is_on_obstacle(Point::new(5, 5)));
+        // directly below the point: it is the cover above, at distance 1
+        let below = Point::new(5, 4);
+        assert_eq!(o.cover_above(below), Some(Segment::horizontal(5, 5, 5)));
+        assert_eq!(
+            o.escape_line(below, Orientation::Vertical),
+            Segment::vertical(5, 0, 4)
+        );
+        // on the same row: blocks collinearly
+        assert_eq!(
+            o.escape_line(Point::new(2, 5), Orientation::Horizontal),
+            Segment::horizontal(5, 0, 4)
+        );
+        assert_eq!(
+            o.escape_line(Point::new(8, 5), Orientation::Horizontal),
+            Segment::horizontal(5, 6, 10)
+        );
+        // the vertical line at x = 5 through a point above is stopped, too
+        assert_eq!(
+            o.escape_line(Point::new(5, 8), Orientation::Vertical),
+            Segment::vertical(5, 6, 10)
+        );
+        // one column over the point is invisible
+        assert_eq!(
+            o.escape_line(Point::new(6, 8), Orientation::Vertical),
+            Segment::vertical(6, 0, 10)
+        );
+        // a zero-length path segment (a point) is free iff the point is
+        assert!(!o.is_free_segment(&Segment::horizontal(5, 5, 5)));
+        assert!(!o.is_free_segment(&Segment::vertical(5, 5, 5)));
+        assert!(o.is_free_segment(&Segment::vertical(5, 6, 6)));
+        // add_path_corners stores points
+        o.add_path_corners(&[Point::new(1, 1), Point::new(1, 3)]);
+        assert!(o.is_on_obstacle(Point::new(1, 1)));
+        assert!(o.is_on_obstacle(Point::new(1, 3)));
+        assert!(!o.is_on_obstacle(Point::new(1, 2)));
+    }
+
+    #[test]
+    fn points_on_the_bounds_and_covers_at_distance_one() {
+        let mut o = ObstacleSet::new(Bounds::new(Point::new(0, 0), Point::new(10, 10)));
+        o.add_segment(Segment::vertical(1, 0, 10)); // wall right next to the left edge
+        let corner = Point::new(0, 0);
+        assert!(o.is_free_point(corner));
+        assert_eq!(
+            o.escape_line(corner, Orientation::Horizontal),
+            Segment::horizontal(0, 0, 0)
+        );
+        assert_eq!(
+            o.escape_line(corner, Orientation::Vertical),
+            Segment::vertical(0, 0, 10)
+        );
+        let top = Point::new(5, 10);
+        assert_eq!(
+            o.escape_line(top, Orientation::Horizontal),
+            Segment::horizontal(10, 2, 10)
+        );
+        assert!(!o.is_free_point(Point::new(11, 5)));
+        assert!(!o.is_free_point(Point::new(5, -1)));
+        // a wall touching the bounds leaves no gap
+        assert!(!o.is_free_segment(&Segment::horizontal(0, 0, 2)));
+    }
 }

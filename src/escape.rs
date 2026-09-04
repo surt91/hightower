@@ -16,10 +16,13 @@ pub(crate) fn toward(p: Point, z: Point) -> Point {
     }
 }
 
-/// The coordinate one unit beyond `f`, on the side away from `z`.
-/// If `f == z` the positive direction is chosen.
-pub(crate) fn away(f: i64, z: i64) -> i64 {
-    if f >= z { f + 1 } else { f - 1 }
+/// The two ends of a cover together with the coordinate one unit beyond each
+/// end, on the side away from the cover: `from - 1` for the start, `to + 1`
+/// for the end. Because a cover of `z` spans `z`'s coordinate this is also
+/// "away from `z`", including the tie case where an end sits exactly at `z`'s
+/// coordinate (where a plain "away from z" rule would step *into* the cover).
+pub(crate) fn beyond_ends(cover: &Segment) -> [(Point, i64); 2] {
+    [(cover.start(), cover.from - 1), (cover.end(), cover.to + 1)]
 }
 
 /// Escape Process I at object point `z`.
@@ -52,16 +55,15 @@ fn process_i_phase(
     let (neg, pos) = obstacles.bounding_covers(z, new);
 
     // Endpoints of the (up to two) covers, sorted by Euclidean distance to Z.
-    let mut ends: Vec<(Point, Segment)> = Vec::with_capacity(4);
+    let mut ends: Vec<(Point, i64, Segment)> = Vec::with_capacity(4);
     for cover in [neg, pos].into_iter().flatten() {
-        for f in cover.endpoints() {
-            ends.push((f, cover));
+        for (f, e_along) in beyond_ends(&cover) {
+            ends.push((f, e_along, cover));
         }
     }
-    ends.sort_by_key(|(f, _)| f.dist2(z));
+    ends.sort_by_key(|(f, _, _)| f.dist2(z));
 
-    for (f, cover) in ends {
-        let e_along = away(f.along(run), z.along(run));
+    for (_, e_along, cover) in ends {
         let e = Point::from_along_across(run, e_along, z.across(run));
         if !run_line.covers(e) {
             continue; // not reachable on Z's escape line
@@ -209,13 +211,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn toward_and_away_helpers() {
+    fn toward_helper() {
         let z = Point::new(5, 5);
         assert_eq!(toward(Point::new(9, 5), z), Point::new(8, 5));
         assert_eq!(toward(Point::new(5, 1), z), Point::new(5, 2));
         assert_eq!(toward(Point::new(5, 6), z), z);
-        assert_eq!(away(7, 5), 8);
-        assert_eq!(away(2, 5), 1);
-        assert_eq!(away(5, 5), 6);
+    }
+
+    #[test]
+    fn beyond_ends_steps_outward_from_the_cover() {
+        let cover = Segment::horizontal(12, 10, 20);
+        assert_eq!(
+            beyond_ends(&cover),
+            [(Point::new(10, 12), 9), (Point::new(20, 12), 21)]
+        );
+        // a zero-length cover yields both neighbours
+        let point = Segment::vertical(4, 7, 7);
+        assert_eq!(
+            beyond_ends(&point),
+            [(Point::new(4, 7), 6), (Point::new(4, 7), 8)]
+        );
     }
 }
