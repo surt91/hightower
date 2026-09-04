@@ -45,6 +45,106 @@ fn segment_at(path: &[Point], i: usize) -> Segment {
     Segment::between(path[i], path[i + 1]).expect("path is rectilinear")
 }
 
+/// The paper's Second Improvement (Figure 12), applied to the corner list.
+///
+/// Two passes, `A..B` and then the reversed list. Each pass first extends the
+/// *first* segment as far as the obstacles allow and, whenever that extension
+/// crosses a later perpendicular segment, cuts out everything in between
+/// (repeated until it hits nothing; only for paths with more than five
+/// points, as in the flowchart). Then every segment is probed: starting at its
+/// near end `p_i` and moving one unit at a time toward `p_{i+1}`, the escape
+/// line perpendicular to the segment is drawn through the probe point `q`; if
+/// it crosses a later parallel segment at `p'`, the path is shortened to
+/// `p_i, q, p', p_{j+1}, ...` (for `q == p_i` just `p_i, p', ...`) and the
+/// scan moves on to the next segment. The probe at `q == p_i` is the extension
+/// of the previous segment, so together the two parts extend every segment.
+/// Returns whether the path changed.
+pub fn second_improvement(obstacles: &ObstacleSet, path: &mut Vec<Point>) -> bool {
+    let mut changed = false;
+    for pass in 0..2 {
+        if pass == 1 {
+            path.reverse();
+        }
+        changed |= extend_first_segment(obstacles, path);
+        changed |= probe_sweep(obstacles, path);
+        if pass == 1 {
+            path.reverse();
+        }
+    }
+    changed
+}
+
+/// Part one of Figure 12: extend the first segment while it cuts something.
+fn extend_first_segment(obstacles: &ObstacleSet, path: &mut Vec<Point>) -> bool {
+    let mut changed = false;
+    if path.len() <= 5 {
+        return false;
+    }
+    while path.len() >= 4 {
+        let seg = segment_at(path, 0);
+        let k = obstacles.escape_line(path[0], seg.orientation);
+        let mut hit = None;
+        let mut j = 3;
+        while j + 1 < path.len() {
+            if let Some(x) = k.crossing(&segment_at(path, j)) {
+                hit = Some((j, x));
+                break;
+            }
+            j += 2;
+        }
+        match hit {
+            Some((j, x)) => {
+                path.splice(1..=j, [x]);
+                cleanup(path);
+                changed = true;
+            }
+            None => break,
+        }
+    }
+    changed
+}
+
+/// Part two of Figure 12: probe every segment from its near end, one splice
+/// per segment.
+fn probe_sweep(obstacles: &ObstacleSet, path: &mut Vec<Point>) -> bool {
+    let mut changed = false;
+    let mut i = 0;
+    while i + 3 < path.len() {
+        let seg = segment_at(path, i);
+        let o = seg.orientation;
+        let start = path[i].along(o);
+        let end = path[i + 1].along(o);
+        let step = (end - start).signum();
+        let mut q_along = start;
+        while q_along != end {
+            let q = Point::from_along_across(o, q_along, seg.fixed);
+            let k = obstacles.escape_line(q, o.perpendicular());
+            let mut hit = None;
+            let mut j = i + 2;
+            while j + 1 < path.len() {
+                if let Some(x) = k.crossing(&segment_at(path, j)) {
+                    hit = Some((j, x));
+                    break;
+                }
+                j += 2;
+            }
+            if let Some((j, x)) = hit {
+                if q == path[i] {
+                    path.splice(i + 1..=j, [x]);
+                } else {
+                    path.splice(i + 1..=j, [q, x]);
+                }
+                cleanup(path);
+                changed = true;
+                break;
+            }
+            q_along += step;
+        }
+        i += 1;
+    }
+    changed
+}
+
 /// Improvement A (paper Fig. 10 → 11): extend every path segment as far as the
 /// obstacles allow; if the extension crosses a later perpendicular segment,
 /// cut out everything in between. Returns whether the path changed.

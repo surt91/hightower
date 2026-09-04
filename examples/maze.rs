@@ -121,13 +121,12 @@ fn report(result: &hightower::RouteResult, median: Duration) {
 /// Draws the maze, Hightower's 1969 path in gray, our networks and path.
 fn draw(maze: &Maze, result: &hightower::RouteResult, median: Duration, file: &str, note: &str) {
     let bounds = maze.obstacles.bounds();
-    // 224 units on 900 px: one unit of clearance is 4 px, the path 3 px wide,
-    // so the walls stay visible next to it.
+    // 68 units on 900 px: one unit of clearance is 13 px.
     let style = Style {
-        margin: 26.0,
-        obstacle_width: 2.0,
-        path_width: 3.0,
-        dot_radius: 2.5,
+        margin: 8.0,
+        obstacle_width: 2.5,
+        path_width: 3.5,
+        dot_radius: 3.0,
         font_size: 15.0,
         labels: true,
         ..Style::fit(bounds, 900.0)
@@ -170,8 +169,8 @@ fn draw(maze: &Maze, result: &hightower::RouteResult, median: Duration, file: &s
 fn draw_trace(maze: &Maze, result: &hightower::RouteResult, file: &str) {
     let bounds = maze.obstacles.bounds();
     let style = Style {
-        margin: 6.0,
-        obstacle_width: 2.0,
+        margin: 2.0,
+        obstacle_width: 2.5,
         path_width: 3.0,
         dot_radius: 2.0,
         ..Style::fit(bounds, 900.0)

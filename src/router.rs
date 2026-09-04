@@ -3,7 +3,7 @@
 use crate::escape::{ProcessOutcome, process_i, process_ii};
 use crate::geometry::{Orientation, Point, Segment};
 use crate::obstacles::ObstacleSet;
-use crate::refine::{cleanup, improve_extension, improve_probe, reconstruct, validate_path};
+use crate::refine::{cleanup, improve_extension, reconstruct, second_improvement, validate_path};
 use crate::trace::{NetId, Process, Trace, TraceEvent};
 
 /// Orientation of the next escape line a network will construct.
@@ -122,11 +122,12 @@ impl Network {
 pub enum Improvement {
     /// Only the collinear cleanup; the path may contain visible detours.
     None,
-    /// Cleanup plus the segment-extension shortcut (paper Fig. 10 → 11).
+    /// Cleanup plus the segment-extension shortcut only (paper Fig. 10 → 11),
+    /// iterated to a fixed point. Not the paper's procedure; kept for
+    /// comparison.
     ExtensionOnly,
-    /// `ExtensionOnly` plus perpendicular probing along every segment
-    /// (paper Fig. 8 → 9). Removes staircases and the wall-to-wall zigzags
-    /// that Process II leaves behind in corridors. Default.
+    /// The paper's Second Improvement (Figure 12): first-segment extension and
+    /// perpendicular probing of every segment, two passes. Default.
     #[default]
     Full,
 }
@@ -319,37 +320,29 @@ fn finish_path(
         .is_ok()
     );
 
-    if matches!(
-        config.improve,
-        Improvement::ExtensionOnly | Improvement::Full
-    ) {
-        if improve_extension(obstacles, &mut path) {
-            trace.push(TraceEvent::Improved {
-                corners: path.clone(),
-            });
+    match config.improve {
+        Improvement::None => {}
+        Improvement::ExtensionOnly => {
+            if improve_extension(obstacles, &mut path) {
+                trace.push(TraceEvent::Improved {
+                    corners: path.clone(),
+                });
+            }
+            path.reverse();
+            let changed = improve_extension(obstacles, &mut path);
+            path.reverse();
+            if changed {
+                trace.push(TraceEvent::Improved {
+                    corners: path.clone(),
+                });
+            }
         }
-        path.reverse();
-        let changed = improve_extension(obstacles, &mut path);
-        path.reverse();
-        if changed {
-            trace.push(TraceEvent::Improved {
-                corners: path.clone(),
-            });
-        }
-    }
-    if config.improve == Improvement::Full {
-        if improve_probe(obstacles, &mut path) {
-            trace.push(TraceEvent::Improved {
-                corners: path.clone(),
-            });
-        }
-        path.reverse();
-        let changed = improve_probe(obstacles, &mut path);
-        path.reverse();
-        if changed {
-            trace.push(TraceEvent::Improved {
-                corners: path.clone(),
-            });
+        Improvement::Full => {
+            if second_improvement(obstacles, &mut path) {
+                trace.push(TraceEvent::Improved {
+                    corners: path.clone(),
+                });
+            }
         }
     }
     debug_assert!(

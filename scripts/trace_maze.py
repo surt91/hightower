@@ -3,6 +3,7 @@
 
 Input: the 300 dpi bilevel scan of page 19
 (`pdfimages -f 19 -l 19 -png references/hightower.pdf /tmp/hc`).
+Usage: trace_maze.py SCAN.png OUT.txt [PIXELS_PER_UNIT] [--plain]
 The thin lines are the maze walls Hightower fed his program, the thick line is
 the path his program found. The script separates the two by stroke width,
 classifies every ink pixel as part of a horizontal or a vertical stroke by the
@@ -167,37 +168,8 @@ walls_h, walls_v = to_units(wall_h, wall_v, tol=5)
 path_h, path_v = strokes(thick, max_width=40, min_len=45)
 p_h, p_v = to_units(path_h, path_v, tol=8)
 W, H = int(round(crop.shape[1] / SCALE)), int(round(crop.shape[0] / SCALE))
+
 print(f"walls: {len(walls_h)} horizontal, {len(walls_v)} vertical; path: {len(p_h)} + {len(p_v)} pieces; grid {W} x {H}", file=sys.stderr)
-
-out.parent.mkdir(parents=True, exist_ok=True)
-with out.open("w") as f:
-    f.write("# Hightower's Hampton Court maze, traced from the 1969 paper, page 19 (scripts/trace_maze.py).\n")
-    f.write(f"# grid {W} {H}\n")
-    f.write("# walls: 'h y x1 x2' and 'v x y1 y2'; Hightower's plotted path: 'ph' / 'pv'\n")
-    for y, a, b in walls_h:
-        f.write(f"h {y} {a} {b}\n")
-    for x, a, b in walls_v:
-        f.write(f"v {x} {a} {b}\n")
-    for y, a, b in p_h:
-        f.write(f"ph {y} {a} {b}\n")
-    for x, a, b in p_v:
-        f.write(f"pv {x} {a} {b}\n")
-print(f"wrote {out}", file=sys.stderr)
-
-# preview
-preview = out.with_suffix(".svg")
-s = 2.0
-with preview.open("w") as f:
-    f.write(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W*s+20}" height="{H*s+20}"><rect width="100%" height="100%" fill="white"/>\n')
-    for y, a, b in p_h:
-        f.write(f'<line x1="{a*s+10}" y1="{(H-y)*s+10}" x2="{b*s+10}" y2="{(H-y)*s+10}" stroke="#f4a3a3" stroke-width="6"/>\n')
-    for x, a, b in p_v:
-        f.write(f'<line x1="{x*s+10}" y1="{(H-a)*s+10}" x2="{x*s+10}" y2="{(H-b)*s+10}" stroke="#f4a3a3" stroke-width="6"/>\n')
-    for y, a, b in walls_h:
-        f.write(f'<line x1="{a*s+10}" y1="{(H-y)*s+10}" x2="{b*s+10}" y2="{(H-y)*s+10}" stroke="black" stroke-width="2"/>\n')
-    for x, a, b in walls_v:
-        f.write(f'<line x1="{x*s+10}" y1="{(H-a)*s+10}" x2="{x*s+10}" y2="{(H-b)*s+10}" stroke="black" stroke-width="2"/>\n')
-    f.write("</svg>\n")
 
 # --- terminals: the two free ends of the plotted path (A and B)
 pieces = [("h", y, a, b) for y, a, b in p_h] + [("v", x, a, b) for x, a, b in p_v]
@@ -230,5 +202,86 @@ centre = (W / 2, H / 2)
 b_pt = min((q for q in free if q != a_pt), key=lambda q: (q[0] - centre[0]) ** 2 + (q[1] - centre[1]) ** 2)
 if len(free) != 2:
     print("warning: expected exactly two free ends, picked A/B heuristically", file=sys.stderr)
-with out.open("a") as f:
+# --- lattice remap (default; --plain switches it off): keep the order of the wall
+# coordinates but re-space them: coordinates at most one unit apart are the
+# same wall line (or touching ends) and merge; every other gap g becomes
+# max(2, 2 * round(g / 8)) units. Narrow corridors turn two units wide, so a
+# path at unit clearance runs down their middle, wide ones stay wider. Only
+# the order of coordinates matters for which openings exist, so the maze keeps
+# its topology while the drawing gains room between path and walls.
+LATTICE = "--plain" not in sys.argv  # the lattice remap is the default; --plain keeps the scan geometry
+
+
+def lattice_remap(walls_h, walls_v, p_h, p_v):
+    def table_for(values):
+        values = sorted(set(values))
+        table, pos, prev = {}, 0, None
+        for v in values:
+            if prev is not None and v - prev > 1:
+                pos += max(2, 2 * int(round((v - prev) / 8)))
+            table[v] = pos
+            prev = v
+        return table
+
+    xs_ = [a for _, a, _ in walls_h] + [b for _, _, b in walls_h] + [x for x, _, _ in walls_v]
+    ys_ = [y for y, _, _ in walls_h] + [a for _, a, _ in walls_v] + [b for _, _, b in walls_v]
+    tx, ty = table_for(xs_), table_for(ys_)
+
+    def mid(table, v):
+        # a free coordinate: the middle of the corridor it lies in
+        keys = sorted(table)
+        below = [k for k in keys if k <= v]
+        above = [k for k in keys if k > v]
+        if not below:
+            return 1
+        lo = table[max(below)]
+        hi = table[min(above)] if above else lo + 2
+        return (lo + hi) // 2
+
+    new_h = sorted({(ty[y], tx[a], tx[b]) for y, a, b in walls_h})
+    new_v = sorted({(tx[x], ty[a], ty[b]) for x, a, b in walls_v})
+    new_ph = sorted({(mid(ty, y), mid(tx, a), mid(tx, b)) for y, a, b in p_h})
+    new_pv = sorted({(mid(tx, x), mid(ty, a), mid(ty, b)) for x, a, b in p_v})
+    grid = (max(tx.values()), max(ty.values()))
+    return new_h, new_v, new_ph, new_pv, grid, (lambda q: (mid(tx, q[0]), mid(ty, q[1])))
+
+
+remap_point = None
+if LATTICE:
+    walls_h, walls_v, p_h, p_v, (W, H), remap_point = lattice_remap(walls_h, walls_v, p_h, p_v)
+    print(f"lattice remap: grid {W} x {H}", file=sys.stderr)
+
+if remap_point is not None:
+    a_pt, b_pt = remap_point(a_pt), remap_point(b_pt)
+
+out.parent.mkdir(parents=True, exist_ok=True)
+with out.open("w") as f:
+    f.write("# Hightower's Hampton Court maze, traced from the 1969 paper, page 19 (scripts/trace_maze.py).\n")
+    f.write(f"# grid {W} {H}\n")
+    f.write("# walls: 'h y x1 x2' and 'v x y1 y2'; Hightower's plotted path: 'ph' / 'pv'\n")
+    for y, a, b in walls_h:
+        f.write(f"h {y} {a} {b}\n")
+    for x, a, b in walls_v:
+        f.write(f"v {x} {a} {b}\n")
+    for y, a, b in p_h:
+        f.write(f"ph {y} {a} {b}\n")
+    for x, a, b in p_v:
+        f.write(f"pv {x} {a} {b}\n")
     f.write(f"A {a_pt[0]} {a_pt[1]}\nB {b_pt[0]} {b_pt[1]}\n")
+print(f"wrote {out}", file=sys.stderr)
+
+# preview
+preview = out.with_suffix(".svg")
+s = 2.0
+with preview.open("w") as f:
+    f.write(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W*s+20}" height="{H*s+20}"><rect width="100%" height="100%" fill="white"/>\n')
+    for y, a, b in p_h:
+        f.write(f'<line x1="{a*s+10}" y1="{(H-y)*s+10}" x2="{b*s+10}" y2="{(H-y)*s+10}" stroke="#f4a3a3" stroke-width="6"/>\n')
+    for x, a, b in p_v:
+        f.write(f'<line x1="{x*s+10}" y1="{(H-a)*s+10}" x2="{x*s+10}" y2="{(H-b)*s+10}" stroke="#f4a3a3" stroke-width="6"/>\n')
+    for y, a, b in walls_h:
+        f.write(f'<line x1="{a*s+10}" y1="{(H-y)*s+10}" x2="{b*s+10}" y2="{(H-y)*s+10}" stroke="black" stroke-width="2"/>\n')
+    for x, a, b in walls_v:
+        f.write(f'<line x1="{x*s+10}" y1="{(H-a)*s+10}" x2="{x*s+10}" y2="{(H-b)*s+10}" stroke="black" stroke-width="2"/>\n')
+    f.write("</svg>\n")
+

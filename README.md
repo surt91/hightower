@@ -106,8 +106,8 @@ python3 scripts/plot_bench.py                 # -> out/blog/12_benchmark.svg
 * `escape.rs` – Escape Process I (slip around the end of a cover) and
   Process II (retreat along the escape line with trial lines, Figure 6).
 * `refine.rs` – path reconstruction from the escape-point trees, collinear
-  cleanup, the paper's second improvement (segment extension, optional
-  perpendicular probing) and a validity checker.
+  cleanup, the paper's Second Improvement (Figure 12: first-segment
+  extension and perpendicular probing, two passes) and a validity checker.
 * `visibility.rs` – orthogonal visibility graph plus A\* (complete, shortest
   or bend-optimised); the modern reference and the recommended fallback.
 * `grid.rs` – a naive Lee-style BFS used as oracle in tests and as the
@@ -131,18 +131,22 @@ existing paths, `boundary_retreat` 0.2 %.
 
 `examples/data/hampton_court.txt` holds the maze from page 19 of the paper,
 traced from the scan with `scripts/trace_maze.py` (walls, Hightower's
-plotted path, A and B). `cargo run --release --example maze` routes it and
-reports the time the way the plot did, in hours:
+plotted path, A and B). The wall coordinates keep their order but are
+re-spaced onto a lattice (68 x 54 units), which preserves the topology and
+leaves room between path and walls in the drawing. `cargo run --release
+--example maze` routes it and reports the time the way the plot did, in
+hours:
 
 ```
 SOLUTION TO HAMPTON COURT MAZE
 FOUND PATH FROM A TO B
-TOTAL TIME .0000002
+TOTAL TIME .00000004
 ```
 
-The raw path zigzags from wall to wall in the corridors because Process II
-retreats from the far end of each line; the paper's second improvement
-(both parts, `Improvement::Full`, the default) removes that.
+The route agrees with the 1969 plot almost everywhere and is the shortest
+one. The raw path zigzags from wall to wall in the corridors because
+Process II retreats from the far end of each line; the paper's Second
+Improvement (Figure 12, `Improvement::Full`, the default) removes that.
 
 ![the traced maze with both paths](blog/images/03_maze.svg)
 
