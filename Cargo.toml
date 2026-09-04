@@ -7,6 +7,9 @@ license = "MIT OR Apache-2.0"
 keywords = ["routing", "pathfinding", "rectilinear", "line-probe", "diagram"]
 categories = ["algorithms", "graphics"]
 
+[workspace]
+members = ["app"]
+
 [dependencies]
 
 [dev-dependencies]

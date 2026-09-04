@@ -127,6 +127,21 @@ only where an escape line is stopped by a cover, not at the bounding box
 On 16782 random room-and-door scenes the router misses about 1.8 % of the
 existing paths, `boundary_retreat` 0.2 %.
 
+## Interactive demo
+
+`app/` is a small [egui](https://github.com/emilk/egui) program: the article's
+example scene with draggable boxes and endpoints, the two networks and the
+path redrawn on every change. Run it natively with
+
+```sh
+cargo run --release -p hightower-app
+```
+
+or in the browser with [trunk](https://trunk.rs) (`cd app && trunk serve`).
+The workflow in `.github/workflows/pages.yml` builds the WebAssembly version
+and publishes it on the repository's GitHub Pages site (set Pages to
+"Source: GitHub Actions" once).
+
 ## The Hampton Court maze
 
 `examples/data/hampton_court.txt` holds the maze from page 19 of the paper,
