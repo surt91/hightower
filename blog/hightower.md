@@ -90,7 +90,7 @@ Der Pfad, den man aus den Bäumen abliest, ist gültig, aber nicht immer schön.
 
 ![Zwei Bilder der Beispielszene. Links: der Rohpfad mit dem Haken neben B. Rechts: derselbe Pfad nach der Verbesserung ohne den Haken, mit zwei Knicken.](images/09_raw_vs_refined.svg)
 
-*Links der rohe Pfad aus den Escape-Punkten mit dem Umweg rechts von B, rechts nach der zweiten Verbesserungsvariante.*
+*Links der rohe Pfad aus den Escape-Punkten mit dem Umweg rechts von B, rechts derselbe Pfad nach Hightowers *second improvement*.*
 
 Nach jeder Verbesserung läuft noch ein Aufräumschritt, der kollineare Punkte zusammenfasst, und im Debug-Build prüft eine Funktion, dass der Pfad wirklich bei A beginnt, bei B endet, nur rechte Winkel hat und kein Hindernis berührt.
 
