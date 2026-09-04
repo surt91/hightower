@@ -68,28 +68,10 @@ fn diagram_scene() -> (ObstacleSet, Point, Point) {
     (o, p(20, 26), p(80, 74))
 }
 
-/// A cluttered scene where both networks need several steps.
-fn cluttered_scene() -> (ObstacleSet, Point, Point) {
-    let mut o = arena(100);
-    for (x1, y1, x2, y2) in [
-        (6, 23, 38, 36),
-        (12, 38, 25, 46),
-        (21, 38, 34, 60),
-        (41, 41, 68, 49),
-        (21, 44, 42, 64),
-        (11, 52, 19, 65),
-        (11, 54, 42, 66),
-        (29, 66, 47, 78),
-        (61, 67, 72, 88),
-    ] {
-        o.add_rect(p(x1, y1), p(x2, y2));
-    }
-    (o, p(25, 86), p(69, 56))
-}
-
-/// A scene whose raw path has a U-turn next to B that only the probing
-/// improvement removes.
-fn detour_scene() -> (ObstacleSet, Point, Point) {
+/// The running example of the article (figures 4, 6, 8 and 9): eight boxes,
+/// a run with several steps for both networks, and a raw path with a U-turn
+/// next to B that only the probing improvement removes.
+fn running_scene() -> (ObstacleSet, Point, Point) {
     let mut o = arena(100);
     for (x1, y1, x2, y2) in [
         (5, 2, 34, 19),
@@ -99,7 +81,7 @@ fn detour_scene() -> (ObstacleSet, Point, Point) {
         (78, 53, 87, 75),
         (72, 56, 98, 76),
         (1, 76, 31, 97),
-        (59, 78, 70, 92),
+        (59, 84, 70, 96),
     ] {
         o.add_rect(p(x1, y1), p(x2, y2));
     }
@@ -157,23 +139,59 @@ fn fig_staircase() {
     write("02_shortest_vs_straight", &two_up(&left, &right, 30.0));
 }
 
+/// A point of the running scene that has all four covers, chosen so that the
+/// nearest cover is as far away as possible (ties: closest to the centre).
+fn point_with_four_covers(o: &ObstacleSet) -> Point {
+    let b = o.bounds();
+    let centre = Point::new((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2);
+    let mut best: Option<(i64, i128, Point)> = None;
+    for x in b.min.x + 1..b.max.x {
+        for y in b.min.y + 1..b.max.y {
+            let q = Point::new(x, y);
+            let inside_box = o
+                .rects()
+                .iter()
+                .any(|&(min, max)| min.x < q.x && q.x < max.x && min.y < q.y && q.y < max.y);
+            if !o.is_free_point(q) || inside_box {
+                continue;
+            }
+            let covers = [
+                o.cover_above(q),
+                o.cover_below(q),
+                o.cover_left(q),
+                o.cover_right(q),
+            ];
+            if covers.iter().any(Option::is_none) {
+                continue;
+            }
+            let nearest = covers
+                .iter()
+                .flatten()
+                .map(|c| (c.fixed - q.across(c.orientation)).abs())
+                .min()
+                .unwrap_or(0);
+            let d = q.dist2(centre);
+            if best.is_none_or(|(bn, bd, _)| nearest > bn || (nearest == bn && d < bd)) {
+                best = Some((nearest, d, q));
+            }
+        }
+    }
+    best.expect("a point with four covers").2
+}
+
 fn fig_covers() {
-    let mut o = arena(100);
-    o.add_segment(Segment::horizontal(80, 20, 70));
-    o.add_segment(Segment::horizontal(25, 30, 55));
-    o.add_segment(Segment::horizontal(60, 75, 95));
-    o.add_segment(Segment::horizontal(10, 5, 95));
-    o.add_segment(Segment::vertical(15, 30, 70));
-    o.add_segment(Segment::vertical(70, 35, 65));
-    o.add_segment(Segment::vertical(85, 5, 40));
-    o.add_segment(Segment::vertical(45, 85, 100));
-    let q = p(40, 50);
+    let (o, a, b) = running_scene();
+    let q = point_with_four_covers(&o);
+    println!("covers: point {q:?}");
     let scene = Scene {
         obstacles: &o,
-        a: q,
-        b: q,
+        a,
+        b,
     };
-    let style = Style::fit(o.bounds(), 480.0);
+    let style = Style {
+        labels: false,
+        ..Style::fit(o.bounds(), 480.0)
+    };
     let left = render_covers(&scene, q, &style, false);
     let right = render_covers(&scene, q, &style, true);
     write("04_covers_and_escape_lines", &two_up(&left, &right, 30.0));
@@ -218,21 +236,76 @@ fn fig_cover_definition() {
     write("05_cover_definition", &c.finish());
 }
 
-/// Process I in three panels.
+/// Process I in three panels, taken from the first Process I step of network
+/// A in the running scene and zoomed in on it.
 fn fig_process_i() {
-    let mut o = arena(100);
-    o.add_segment(Segment::horizontal(60, 20, 65)); // the ceiling above Z
-    o.add_segment(Segment::vertical(10, 20, 90));
-    o.add_segment(Segment::horizontal(20, 10, 90));
-    o.add_rect(p(75, 40), p(95, 75));
-    let z = p(40, 40);
-    let style = Style::fit(o.bounds(), 320.0);
+    let (o, a, b) = running_scene();
+    let r = route_with(&o, a, b, &RouterConfig::default());
+    let events = &r.trace.events;
+    let idx = events
+        .iter()
+        .position(|e| {
+            matches!(
+                e,
+                TraceEvent::EscapePoint {
+                    net: hightower::NetId::A,
+                    process: hightower::Process::I,
+                    ..
+                }
+            )
+        })
+        .expect("A uses Process I");
+    let TraceEvent::EscapePoint { point: e, .. } = events[idx] else {
+        unreachable!()
+    };
+    // the object point Z: the last A escape point before idx, or A itself
+    let z = events[..idx]
+        .iter()
+        .rev()
+        .find_map(|ev| match ev {
+            TraceEvent::EscapePoint {
+                net: hightower::NetId::A,
+                point,
+                ..
+            } => Some(*point),
+            _ => None,
+        })
+        .unwrap_or(a);
+    // the cover that e slips around: e lies one unit beyond one of its ends,
+    // on the escape line of Z that is perpendicular to the new line
+    let new_orientation = if e.y == z.y {
+        Orientation::Vertical
+    } else {
+        Orientation::Horizontal
+    };
+    let (neg, pos) = o.bounding_covers(z, new_orientation);
+    let cover = [neg, pos]
+        .into_iter()
+        .flatten()
+        .find(|c| {
+            c.endpoints().iter().any(|f| {
+                (f.along(new_orientation.perpendicular())
+                    - e.along(new_orientation.perpendicular()))
+                .abs()
+                    == 1
+            })
+        })
+        .expect("cover next to e");
+    let new_line = o.escape_line(e, new_orientation);
     let h = o.escape_line(z, Orientation::Horizontal);
     let v = o.escape_line(z, Orientation::Vertical);
-    let ceiling = o.cover_above(z).expect("ceiling");
-    let e = p(ceiling.to + 1, z.y);
-    let new_line = o.escape_line(e, Orientation::Vertical);
+    println!("process i: Z {z:?}, e {e:?}, cover {cover:?}, new line {new_line:?}");
 
+    let pts = [z, e, cover.start(), cover.end()];
+    let x0 = pts.iter().map(|q| q.x).min().unwrap() - 12;
+    let x1 = pts.iter().map(|q| q.x).max().unwrap() + 12;
+    let y0 = pts.iter().map(|q| q.y).min().unwrap() - 12;
+    let y1 = pts.iter().map(|q| q.y).max().unwrap() + 12;
+    let zoom = Bounds::new(p(x0.max(0), y0.max(0)), p(x1.min(100), y1.min(100)));
+    let style = Style {
+        labels: false,
+        ..Style::fit(zoom, 420.0)
+    };
     let base = |c: &mut Canvas| {
         c.frame();
         c.obstacles(&o);
@@ -241,22 +314,41 @@ fn fig_process_i() {
         c.dot(z, style.endpoint_fill, style.dot_radius + 1.5);
         c.text(z, 8.0, 16.0, "Z", style.label);
     };
-    let mut c1 = Canvas::new(o.bounds(), style.clone());
+    let mut c1 = Canvas::new(zoom, style.clone());
     base(&mut c1);
-    c1.segment(&ceiling, style.intersection, style.obstacle_width + 2.0, "");
-    let mut c2 = Canvas::new(o.bounds(), style.clone());
+    c1.segment(&cover, style.intersection, style.obstacle_width + 2.0, "");
+    let mut c2 = Canvas::new(zoom, style.clone());
     base(&mut c2);
-    c2.segment(&ceiling, style.intersection, style.obstacle_width + 2.0, "");
+    c2.segment(&cover, style.intersection, style.obstacle_width + 2.0, "");
     c2.ring(e, style.intersection, style.dot_radius * 2.0, 2.0);
     c2.dot(e, style.net_a, style.dot_radius);
     c2.text(e, 8.0, 16.0, "e", style.label);
-    let mut c3 = Canvas::new(o.bounds(), style.clone());
+    let mut c3 = Canvas::new(zoom, style.clone());
     base(&mut c3);
     c3.segment(&new_line, style.net_a, style.line_width * 1.6, "");
     c3.dot(e, style.net_a, style.dot_radius);
     c3.text(e, 8.0, 16.0, "e", style.label);
     let panel12 = two_up(&c1.finish(), &c2.finish(), 20.0);
     write("06_process_i", &two_up(&panel12, &c3.finish(), 20.0));
+
+    // overview: where the zoom window sits in the whole scene
+    let full = Style::fit(o.bounds(), 300.0);
+    let mut c = Canvas::new(o.bounds(), full.clone());
+    c.frame();
+    c.obstacles(&o);
+    c.trace(
+        &r.trace,
+        idx + 1,
+        Layers {
+            final_path: false,
+            ..Layers::default()
+        },
+    );
+    c.endpoints(a, b);
+    for s in hightower::svg::rect_segments(zoom.min, zoom.max) {
+        c.marker_segment(&s, full.intersection, 1.5);
+    }
+    write("06_process_i_overview", &c.finish());
 }
 
 /// Process II: Z sits in a pocket whose lid has a gap, but a small shelf
@@ -301,16 +393,25 @@ fn fig_process_ii() {
         })
         .map(|i| i + 1)
         .unwrap_or(r.trace.len());
-    let left = render(
-        &scene,
+    let zoom = Bounds::new(p(10, 5), p(40, 35));
+    let zstyle = Style {
+        labels: false,
+        ..Style::fit(zoom, 480.0)
+    };
+    let mut c = Canvas::new(zoom, zstyle.clone());
+    c.frame();
+    c.obstacles(&o);
+    c.trace(
         &r.trace,
         upto,
-        &style,
         Layers {
             final_path: false,
             ..Layers::default()
         },
     );
+    c.dot(a, zstyle.endpoint_fill, zstyle.dot_radius + 1.5);
+    c.text(a, -20.0, 5.0, "Z", zstyle.label);
+    let left = c.finish();
     let right = render(&scene, &r.trace, r.trace.len(), &style, Layers::default());
     println!(
         "process ii: {:?}, {} steps, {} lines",
@@ -325,7 +426,7 @@ fn fig_process_ii() {
 }
 
 fn fig_animation() {
-    let (o, a, b) = cluttered_scene();
+    let (o, a, b) = running_scene();
     let r = route_with(&o, a, b, &RouterConfig::default());
     let scene = Scene {
         obstacles: &o,
@@ -360,7 +461,7 @@ fn fig_animation() {
 }
 
 fn fig_refine() {
-    let (o, a, b) = detour_scene();
+    let (o, a, b) = running_scene();
     let scene = Scene {
         obstacles: &o,
         a,

@@ -88,7 +88,7 @@ let calm = route_visibility_with(&obstacles, a, b, &VisibilityConfig { bend_pena
 ```sh
 cargo run --release --example demo            # a few scenes -> out/demo_*.svg
 cargo run --release --example animate         # one SVG per trace event -> out/frames/
-cargo run --release --example maze            # a hedge maze, as in the paper -> out/maze.svg
+cargo run --release --example maze            # Hightower's Hampton Court maze -> out/maze.svg
 cargo run --release --example counterexample  # searches scenes the router cannot solve
 cargo run --release --example blog_figures    # all figures of the blog post -> out/blog/
 cargo run --release --example bench           # Hightower vs. grid BFS vs. visibility graph -> out/bench.csv
@@ -104,7 +104,7 @@ python3 scripts/plot_bench.py                 # -> out/blog/12_benchmark.svg
   covers (that is where the clearance comes from).
 * `router.rs` – the two networks, the main loop and one escape step.
 * `escape.rs` – Escape Process I (slip around the end of a cover) and
-  Process II (retreat along the escape line and branch off).
+  Process II (retreat along the escape line and branch off, recursively).
 * `refine.rs` – path reconstruction from the escape-point trees, collinear
   cleanup, the paper's second improvement (segment extension, optional
   perpendicular probing) and a validity checker.
@@ -113,13 +113,32 @@ python3 scripts/plot_bench.py                 # -> out/blog/12_benchmark.svg
 * `grid.rs` – a naive Lee-style BFS used as oracle in tests and as the
   baseline in the benchmark.
 
-Two deliberate deviations from the plan in `references/plan.md`, both in
-favour of the paper: escape points carry parent pointers (a tree) instead of
-lines, which makes the paper's "first refinement" unnecessary; and Process II
-only retreats from escape-line ends that were stopped by a cover, not from
-ends on the bounding box. The latter is what keeps open scenes from being
-flooded with probe lines; the more thorough variant is available as
-`RouterConfig::boundary_retreat`.
+Three deliberate deviations from the plan in `references/plan.md`: escape
+points carry parent pointers (a tree) instead of lines, which makes the
+paper's "first refinement" unnecessary; Process II only retreats from
+escape-line ends that were stopped by a cover, not from ends on the bounding
+box, as in the paper (the more thorough variant is
+`RouterConfig::boundary_retreat`); and Process II retreats recursively along
+the probe lines it constructs (`RouterConfig::recursive_retreat`, default
+on). The last one follows from the paper's wording and is what makes the
+router solve Hightower's own Hampton Court maze, which the flat reading
+cannot. On 16782 random room-and-door scenes the default misses about 2 %
+of the existing paths, the flat reading 2.3 %, and `boundary_retreat` 0.1 %.
+
+## The Hampton Court maze
+
+`examples/data/hampton_court.txt` holds the maze from page 19 of the paper,
+traced from the scan with `scripts/trace_maze.py` (walls, Hightower's
+plotted path, A and B). `cargo run --release --example maze` routes it and
+reports the time the way the plot did, in hours:
+
+```
+SOLUTION TO HAMPTON COURT MAZE
+FOUND PATH FROM A TO B
+TOTAL TIME .000000163
+```
+
+![the traced maze with both paths](blog/images/03_maze.svg)
 
 ## Tests
 
