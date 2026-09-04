@@ -146,12 +146,42 @@ pub(crate) fn process_ii(
         Orientation::Vertical,
     ];
 
+    // A walker that has just stepped onto `z` still owes the paper's last
+    // trial: Figure 6 constructs the escape line through `r_i` *after* moving
+    // it, so the final position probed is `z` itself. There the trial line is
+    // `z`'s own escape line perpendicular to the one the walker came along;
+    // Process I at `z` has already failed (P3), only the intersection test is
+    // new. Each orientation is tested at most once.
+    let mut pending = [false; 4];
+    let mut z_tested = [false; 2];
+
     loop {
-        if r.iter().all(|&p| p == z) {
+        if r.iter().all(|&p| p == z) && !pending.iter().any(|&b| b) {
             return ProcessOutcome::Failed;
         }
         for i in 0..4 {
             if r[i] == z {
+                if pending[i] && !z_tested[i % 2] {
+                    pending[i] = false;
+                    z_tested[i % 2] = true;
+                    let line = obstacles.escape_line(z, NEW[i]);
+                    if !net.is_used(&line) {
+                        trace.push(TraceEvent::ProbeLine {
+                            net: net.id,
+                            line,
+                            through: z,
+                        });
+                        if let Some((point, line_other)) = other.find_crossing(&line) {
+                            let line_here = net.add_line(line, z_id, trace);
+                            return ProcessOutcome::Intersection {
+                                point,
+                                line_here,
+                                line_other,
+                            };
+                        }
+                    }
+                }
+                pending[i] = false;
                 continue;
             }
             let probe = obstacles.escape_line(r[i], NEW[i]);
@@ -181,6 +211,9 @@ pub(crate) fn process_ii(
                     point: r[i],
                     process: Process::II,
                 });
+                // `r_i` became an escape point, so its trial line stays in the
+                // network like every other constructed escape line.
+                net.line_id_or_add(probe, r_id, trace);
                 net.push_point(e, Some(r_id));
                 net.flag = Flag::One(o);
                 trace.push(TraceEvent::EscapePoint {
@@ -191,6 +224,7 @@ pub(crate) fn process_ii(
                 return ProcessOutcome::Escaped;
             }
             r[i] = toward(r[i], z);
+            pending[i] = r[i] == z;
         }
     }
 }
@@ -198,6 +232,99 @@ pub(crate) fn process_ii(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::geometry::Bounds;
+    use crate::trace::NetId;
+
+    fn p(x: i64, y: i64) -> Point {
+        Point::new(x, y)
+    }
+
+    /// Figure 6 walks `r_1` all the way onto `Z` and constructs the trial
+    /// line there: `Z`'s horizontal escape line, which was never built
+    /// because `Z`'s flag was VERTICAL. It is the only line that crosses the
+    /// other network, so the paper ends with the intersect flag set.
+    #[test]
+    fn process_ii_probes_the_object_point_itself_last() {
+        let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(20, 20)));
+        o.add_segment(Segment::horizontal(13, 0, 20)); // bar above Z, wall to wall
+        o.add_segment(Segment::horizontal(8, 14, 16)); // short covers that bound
+        o.add_segment(Segment::horizontal(11, 14, 16)); // the other net's line
+        let z = p(10, 10);
+        let mut net = Network::new(NetId::A, z);
+        let mut trace = Trace::default();
+        net.add_line(o.escape_line(z, Orientation::Vertical), 0, &mut trace);
+        net.flag = Flag::One(Orientation::Vertical);
+        let mut other = Network::new(NetId::B, p(15, 10));
+        let x15 = o.escape_line(p(15, 10), Orientation::Vertical);
+        assert_eq!(x15, Segment::vertical(15, 9, 10));
+        other.add_line(x15, 0, &mut trace);
+
+        assert!(process_i(&o, &net, z).is_none());
+        let config = RouterConfig::default();
+        match process_ii(&o, &mut net, &other, 0, z, &config, &mut trace) {
+            ProcessOutcome::Intersection {
+                point,
+                line_here,
+                line_other,
+            } => {
+                assert_eq!(point, p(15, 10));
+                assert_eq!(line_other, 0);
+                assert_eq!(net.lines[line_here].segment, Segment::horizontal(10, 0, 20));
+                assert_eq!(net.lines[line_here].through, 0);
+            }
+            _ => panic!("the trial line through Z must find the intersection"),
+        }
+        // the probes at (10,12) and (10,11) came first, Z's own line last
+        let probes: Vec<Point> = trace
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                TraceEvent::ProbeLine { through, .. } => Some(*through),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(probes, vec![p(10, 12), p(10, 11), z]);
+        // Z is not pushed a second time
+        assert_eq!(net.points.len(), 1);
+    }
+
+    /// When `r_i` becomes an escape point (Process I succeeds there) the
+    /// trial line constructed through it is a real escape line of the
+    /// network: it is entered in `L` and counts as used from then on.
+    #[test]
+    fn process_ii_enters_the_trial_line_of_a_successful_retreat_position() {
+        let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(20, 20)));
+        o.add_segment(Segment::horizontal(13, 0, 20)); // bar above Z, wall to wall
+        o.add_segment(Segment::vertical(14, 12, 20)); // covers only y >= 12
+        let z = p(10, 10);
+        let mut net = Network::new(NetId::A, z);
+        let mut trace = Trace::default();
+        net.add_line(o.escape_line(z, Orientation::Horizontal), 0, &mut trace);
+        net.add_line(o.escape_line(z, Orientation::Vertical), 0, &mut trace);
+        let other = Network::new(NetId::B, p(1, 1));
+
+        assert!(process_i(&o, &net, z).is_none());
+        let config = RouterConfig::default();
+        assert!(matches!(
+            process_ii(&o, &mut net, &other, 0, z, &config, &mut trace),
+            ProcessOutcome::Escaped
+        ));
+        let pts: Vec<(Point, Option<usize>)> =
+            net.points.iter().map(|e| (e.point, e.parent)).collect();
+        assert_eq!(
+            pts,
+            vec![(z, None), (p(10, 12), Some(0)), (p(10, 11), Some(1))]
+        );
+        assert_eq!(net.flag, Flag::One(Orientation::Horizontal));
+        let trial = Segment::horizontal(12, 0, 13);
+        assert!(net.is_used(&trial));
+        let line = net
+            .lines
+            .iter()
+            .find(|l| l.segment == trial)
+            .expect("trial line through r_1 is entered");
+        assert_eq!(line.through, 1);
+    }
 
     #[test]
     fn toward_helper() {

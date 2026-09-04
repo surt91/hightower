@@ -75,10 +75,13 @@ impl ObstacleSet {
 
     /// Adds only the corners of a path as zero-length obstacles. This is the
     /// paper's "PERT diagram" mode: later paths may cross this one but cannot
-    /// run along it or bend on it.
+    /// run along it or bend on it. As in the paper each corner is entered in
+    /// both `C_h` and `C_v`, so it acts as a horizontal cover for points in
+    /// its column and as a vertical cover for points in its row.
     pub fn add_path_corners(&mut self, corners: &[Point]) {
         for &c in corners {
             self.add_segment(Segment::horizontal(c.y, c.x, c.x));
+            self.add_segment(Segment::vertical(c.x, c.y, c.y));
         }
     }
 
@@ -448,6 +451,41 @@ mod tests {
         assert!(o.is_on_obstacle(Point::new(1, 1)));
         assert!(o.is_on_obstacle(Point::new(1, 3)));
         assert!(!o.is_on_obstacle(Point::new(1, 2)));
+    }
+
+    /// PERT mode enters every corner in both `C_h` and `C_v` (paper,
+    /// Appendix B), so a corner is a cover for the points in its row as well
+    /// as for the points in its column and Process I can slip around it.
+    #[test]
+    fn path_corners_are_covers_in_both_directions() {
+        let mut o = ObstacleSet::new(Bounds::new(Point::new(0, 0), Point::new(10, 10)));
+        o.add_path_corners(&[Point::new(5, 5)]);
+        assert!(o.is_on_obstacle(Point::new(5, 5)));
+        assert_eq!(
+            o.cover_right(Point::new(2, 5)),
+            Some(Segment::vertical(5, 5, 5))
+        );
+        assert_eq!(
+            o.cover_left(Point::new(8, 5)),
+            Some(Segment::vertical(5, 5, 5))
+        );
+        assert_eq!(
+            o.cover_above(Point::new(5, 2)),
+            Some(Segment::horizontal(5, 5, 5))
+        );
+        assert_eq!(
+            o.cover_below(Point::new(5, 8)),
+            Some(Segment::horizontal(5, 5, 5))
+        );
+        assert_eq!(o.cover_right(Point::new(2, 6)), None);
+        assert_eq!(
+            o.escape_line(Point::new(2, 5), Orientation::Horizontal),
+            Segment::horizontal(5, 0, 4)
+        );
+        assert_eq!(
+            o.escape_line(Point::new(5, 2), Orientation::Vertical),
+            Segment::vertical(5, 0, 4)
+        );
     }
 
     #[test]
