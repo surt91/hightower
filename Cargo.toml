@@ -1,0 +1,15 @@
+[package]
+name = "hightower"
+version = "0.1.0"
+edition = "2024"
+description = "Hightower's 1969 line-search routing algorithm: fast rectilinear paths around axis-parallel obstacles, no grid"
+license = "MIT OR Apache-2.0"
+keywords = ["routing", "pathfinding", "rectilinear", "line-probe", "diagram"]
+categories = ["algorithms", "graphics"]
+
+[dependencies]
+
+[dev-dependencies]
+
+[profile.release]
+debug = false
