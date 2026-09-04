@@ -23,6 +23,9 @@ const HIGHLIGHT: Color32 = Color32::from_rgba_premultiplied(0x1f, 0x6f, 0xd6, 0x
 
 /// Pointer distance (in points) within which a handle counts as grabbed.
 const GRAB_RADIUS: f32 = 9.0;
+/// Width of the control column on the right, in points.
+const SIDE_WIDTH: f32 = 300.0;
+const SIDE_BACKGROUND: Color32 = Color32::from_rgb(0xf4, 0xf4, 0xf4);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Block {
@@ -427,151 +430,164 @@ impl eframe::App for App {
             },
         };
 
-        egui::Panel::right("controls")
-            .exact_size(300.0)
-            .show(ui, |ui| self.controls(ui, &stats));
+        // Fixed split: egui panels re-measure their content, which nudged the
+        // board size whenever the stats text changed. The side panel gets an
+        // exact rectangle and the board keeps the rest.
+        let full = ui.max_rect();
+        let split_x = full.max.x - SIDE_WIDTH;
+        let board_area = Rect::from_min_max(full.min, Pos2::new(split_x, full.max.y));
+        let side_area = Rect::from_min_max(Pos2::new(split_x, full.min.y), full.max);
+        ui.painter()
+            .rect_filled(board_area, CornerRadius::ZERO, Color32::WHITE);
+        ui.painter()
+            .rect_filled(side_area, CornerRadius::ZERO, SIDE_BACKGROUND);
 
-        egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(Color32::WHITE))
-            .show(ui, |ui| {
-                let (response, painter) =
-                    ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
-                let view = View::fit(response.rect);
+        let response = ui.allocate_rect(board_area, Sense::click_and_drag());
+        let painter = ui.painter_at(board_area);
+        {
+            let view = View::fit(response.rect);
 
-                // --- interaction -------------------------------------------------
-                let hover = response
-                    .hover_pos()
-                    .map(|pos| self.hover_at(&view, pos))
-                    .unwrap_or(Hover::Empty);
-                if let Some(pos) = response.interact_pointer_pos() {
-                    if response.drag_started() {
-                        self.begin_drag(&view, pos);
+            // --- interaction -------------------------------------------------
+            let hover = response
+                .hover_pos()
+                .map(|pos| self.hover_at(&view, pos))
+                .unwrap_or(Hover::Empty);
+            if let Some(pos) = response.interact_pointer_pos() {
+                if response.drag_started() {
+                    self.begin_drag(&view, pos);
+                }
+                if response.dragged() {
+                    self.update_drag(&view, pos);
+                }
+            }
+            if response.drag_stopped() {
+                self.end_drag();
+            }
+            if response.secondary_clicked()
+                || ctx.input(|i| {
+                    i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)
+                })
+            {
+                match hover {
+                    Hover::Block(i) | Hover::Corner(i) if self.drag.is_none() => {
+                        self.blocks.remove(i);
                     }
-                    if response.dragged() {
-                        self.update_drag(&view, pos);
+                    _ => {}
+                }
+            }
+            if response.hovered() {
+                ctx.set_cursor_icon(match (self.drag, hover) {
+                    (Some(Drag::Create { .. }), _) | (None, Hover::Empty) => {
+                        egui::CursorIcon::Crosshair
                     }
-                }
-                if response.drag_stopped() {
-                    self.end_drag();
-                }
-                if response.secondary_clicked()
-                    || ctx.input(|i| {
-                        i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)
-                    })
-                {
-                    match hover {
-                        Hover::Block(i) | Hover::Corner(i) if self.drag.is_none() => {
-                            self.blocks.remove(i);
-                        }
-                        _ => {}
+                    (Some(Drag::Resize { .. }), _) | (None, Hover::Corner(_)) => {
+                        egui::CursorIcon::ResizeNwSe
                     }
-                }
-                if response.hovered() {
-                    ctx.set_cursor_icon(match (self.drag, hover) {
-                        (Some(Drag::Create { .. }), _) | (None, Hover::Empty) => {
-                            egui::CursorIcon::Crosshair
-                        }
-                        (Some(Drag::Resize { .. }), _) | (None, Hover::Corner(_)) => {
-                            egui::CursorIcon::ResizeNwSe
-                        }
-                        (Some(_), _) => egui::CursorIcon::Grabbing,
-                        (None, _) => egui::CursorIcon::Grab,
-                    });
-                }
+                    (Some(_), _) => egui::CursorIcon::Grabbing,
+                    (None, _) => egui::CursorIcon::Grab,
+                });
+            }
 
-                // --- drawing -------------------------------------------------------
+            // --- drawing -------------------------------------------------------
+            painter.rect_stroke(
+                view.board_rect(),
+                CornerRadius::ZERO,
+                Stroke::new(1.0, FRAME),
+                StrokeKind::Middle,
+            );
+
+            let obstacle_stroke = Stroke::new(2.0, OBSTACLE);
+            for (i, block) in self.blocks.iter().enumerate() {
+                let rect = view.block_rect(block);
+                if matches!(hover, Hover::Block(j) | Hover::Corner(j) if j == i) {
+                    painter.rect_filled(rect, CornerRadius::ZERO, HIGHLIGHT);
+                }
                 painter.rect_stroke(
-                    view.board_rect(),
+                    rect,
                     CornerRadius::ZERO,
-                    Stroke::new(1.0, FRAME),
+                    obstacle_stroke,
                     StrokeKind::Middle,
                 );
+            }
+            if let Some(Drag::Create { start, current }) = self.drag {
+                let rect = Rect::from_two_pos(view.to_screen(start), view.to_screen(current));
+                painter.rect_stroke(
+                    rect,
+                    CornerRadius::ZERO,
+                    Stroke::new(1.5, NET_A),
+                    StrokeKind::Middle,
+                );
+            }
 
-                let obstacle_stroke = Stroke::new(2.0, OBSTACLE);
-                for (i, block) in self.blocks.iter().enumerate() {
-                    let rect = view.block_rect(block);
-                    if matches!(hover, Hover::Block(j) | Hover::Corner(j) if j == i) {
-                        painter.rect_filled(rect, CornerRadius::ZERO, HIGHLIGHT);
-                    }
-                    painter.rect_stroke(
-                        rect,
-                        CornerRadius::ZERO,
-                        obstacle_stroke,
-                        StrokeKind::Middle,
-                    );
-                }
-                if let Some(Drag::Create { start, current }) = self.drag {
-                    let rect = Rect::from_two_pos(view.to_screen(start), view.to_screen(current));
-                    painter.rect_stroke(
-                        rect,
-                        CornerRadius::ZERO,
-                        Stroke::new(1.5, NET_A),
-                        StrokeKind::Middle,
-                    );
-                }
-
-                let net_color = |net: NetId| if net == NetId::A { NET_A } else { NET_B };
-                for event in &result.trace.events {
-                    match event {
-                        TraceEvent::LineAdded { net, line, .. } if self.show_lines => {
-                            painter.line_segment(
-                                segment_points(&view, line),
-                                Stroke::new(1.2, net_color(*net)),
-                            );
-                        }
-                        TraceEvent::ProbeLine { net, line, .. } if self.show_probes => {
-                            let [p, q] = segment_points(&view, line);
-                            painter.extend(egui::Shape::dashed_line(
-                                &[p, q],
-                                Stroke::new(1.0, net_color(*net).gamma_multiply(0.6)),
-                                4.0,
-                                4.0,
-                            ));
-                        }
-                        TraceEvent::EscapePoint { net, point, .. } if self.show_lines => {
-                            painter.circle_filled(view.to_screen(*point), 3.0, net_color(*net));
-                        }
-                        TraceEvent::Intersection { point, .. } if self.show_lines => {
-                            painter.circle_stroke(
-                                view.to_screen(*point),
-                                6.0,
-                                Stroke::new(2.0, INTERSECTION),
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-
-                if let (true, Some(path)) = (self.show_shortest, &shortest) {
-                    let pts: Vec<Pos2> = path.iter().map(|&p| view.to_screen(p)).collect();
-                    painter.extend(egui::Shape::dashed_line(
-                        &pts,
-                        Stroke::new(2.0, SHORTEST),
-                        6.0,
-                        4.0,
-                    ));
-                }
-                if let Some(path) = &result.path {
-                    for w in path.windows(2) {
+            let net_color = |net: NetId| if net == NetId::A { NET_A } else { NET_B };
+            for event in &result.trace.events {
+                match event {
+                    TraceEvent::LineAdded { net, line, .. } if self.show_lines => {
                         painter.line_segment(
-                            [view.to_screen(w[0]), view.to_screen(w[1])],
-                            Stroke::new(3.0, PATH),
+                            segment_points(&view, line),
+                            Stroke::new(1.2, net_color(*net)),
                         );
                     }
-                    for &corner in path {
-                        painter.circle_filled(view.to_screen(corner), 1.5, PATH);
+                    TraceEvent::ProbeLine { net, line, .. } if self.show_probes => {
+                        let [p, q] = segment_points(&view, line);
+                        painter.extend(egui::Shape::dashed_line(
+                            &[p, q],
+                            Stroke::new(1.0, net_color(*net).gamma_multiply(0.6)),
+                            4.0,
+                            4.0,
+                        ));
                     }
+                    TraceEvent::EscapePoint { net, point, .. } if self.show_lines => {
+                        painter.circle_filled(view.to_screen(*point), 3.0, net_color(*net));
+                    }
+                    TraceEvent::Intersection { point, .. } if self.show_lines => {
+                        painter.circle_stroke(
+                            view.to_screen(*point),
+                            6.0,
+                            Stroke::new(2.0, INTERSECTION),
+                        );
+                    }
+                    _ => {}
                 }
+            }
 
-                let font = FontId::proportional(15.0);
-                for (p, label, align, offset) in [
-                    (self.a, "A", Align2::RIGHT_BOTTOM, Vec2::new(-6.0, -4.0)),
-                    (self.b, "B", Align2::LEFT_BOTTOM, Vec2::new(6.0, -4.0)),
-                ] {
-                    let pos = view.to_screen(p);
-                    painter.circle_filled(pos, 5.0, OBSTACLE);
-                    painter.text(pos + offset, align, label, font.clone(), OBSTACLE);
+            if let (true, Some(path)) = (self.show_shortest, &shortest) {
+                let pts: Vec<Pos2> = path.iter().map(|&p| view.to_screen(p)).collect();
+                painter.extend(egui::Shape::dashed_line(
+                    &pts,
+                    Stroke::new(2.0, SHORTEST),
+                    6.0,
+                    4.0,
+                ));
+            }
+            if let Some(path) = &result.path {
+                for w in path.windows(2) {
+                    painter.line_segment(
+                        [view.to_screen(w[0]), view.to_screen(w[1])],
+                        Stroke::new(3.0, PATH),
+                    );
                 }
-            });
+                for &corner in path {
+                    painter.circle_filled(view.to_screen(corner), 1.5, PATH);
+                }
+            }
+
+            let font = FontId::proportional(15.0);
+            for (p, label, align, offset) in [
+                (self.a, "A", Align2::RIGHT_BOTTOM, Vec2::new(-6.0, -4.0)),
+                (self.b, "B", Align2::LEFT_BOTTOM, Vec2::new(6.0, -4.0)),
+            ] {
+                let pos = view.to_screen(p);
+                painter.circle_filled(pos, 5.0, OBSTACLE);
+                painter.text(pos + offset, align, label, font.clone(), OBSTACLE);
+            }
+        }
+
+        let mut side = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(side_area.shrink(12.0))
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+        );
+        self.controls(&mut side, &stats);
     }
 }
