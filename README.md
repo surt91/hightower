@@ -18,7 +18,7 @@ the other, a path exists and is read off the two trees.
 
 * **Fast and memory-light.** Only line segments are ever constructed; there is
   no grid, so the cost depends on the clutter, not on the area. Routing a
-  20-box scene takes about 1–2 µs regardless of whether the board is 64 or
+  20-box scene takes about 1–5 µs regardless of whether the board is 64 or
   2048 units wide (see `examples/bench.rs`).
 * **Few bends, not shortest.** Paths tend to be straight and calm, but they
   are not guaranteed to be shortest.
