@@ -62,5 +62,5 @@
 <text x="498.2" y="402.8" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#111111">B</text>
 <text x="50%" y="24" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">SOLUTION TO HAMPTON COURT MAZE</text>
 <text x="50%" y="46" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">FOUND PATH FROM A TO B</text>
-<text x="50%" y="64" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">TOTAL TIME .000000037690</text>
+<text x="50%" y="64" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">TOTAL TIME .000000047003</text>
 </svg>

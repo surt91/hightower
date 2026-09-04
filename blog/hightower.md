@@ -30,7 +30,7 @@ Das Paper ist auch als Zeitdokument lesenswert. Hightower hat sein Programm auf 
 
 ![Das aus dem Scan nachgezeichnete Labyrinth: dünne schwarze Wände, der Pfad dieser Implementierung in Rot, darüber in Schreibmaschinenschrift die Beschriftung des Originals mit der neuen Zeit.](images/03_maze.svg)
 
-*Das aus dem Scan nachgezeichnete Labyrinth mit dem Pfad dieser Implementierung. Er nimmt bis auf Kleinigkeiten dieselbe Route wie Hightowers Plot und ist hier sogar der kürzeste. Die Zeit steht in seiner Einheit: rund 0,00000004 Stunden, also etwas über eine Zehntelmillisekunde, für 49 Schritte mit 51 eingetragenen und 143 versuchten Linien.*
+*Das aus dem Scan nachgezeichnete Labyrinth mit dem Pfad dieser Implementierung. Er nimmt bis auf Kleinigkeiten dieselbe Route wie Hightowers Plot und ist hier sogar der kürzeste. Die Zeit steht in seiner Einheit: rund 0,00000004 Stunden, also etwas über eine Zehntelmillisekunde, für 49 Schritte mit 75 eingetragenen und 146 versuchten Linien.*
 
 Dass der Router das Labyrinth überhaupt löst, war weniger selbstverständlich, als ich dachte. Dazu weiter unten mehr.
 
@@ -122,7 +122,7 @@ Hightower nennt im Paper zwei Nachteile, und beide lassen sich vorführen.
 
 Der erste ist harmlos, der Pfad ist nicht der kürzeste. Im Bild weiter oben war der gefundene Pfad 142 Einheiten lang statt 104. Für Diagramme ist das der gewünschte Kompromiss. Für Platinen schlug Hightower vor, den Algorithmus mehrfach mit leicht veränderten Regeln laufen zu lassen und den kürzesten der Kandidaten zu nehmen.
 
-Der zweite ist ernster. Der Algorithmus kann einen Pfad übersehen, der existiert, und das liegt an der Regel, dass keine Escape-Linie zweimal benutzt wird. Hightower beschreibt den Fall selbst. Wenn das Netz eine Escape-Linie benutzt hat, um durch eine schmale Öffnung in eine Box zu gelangen, kommt es durch dieselbe Öffnung nicht wieder heraus. Er schreibt dazu, in allen seinen Experimenten sei ein Pfad gefunden worden, wenn einer existierte. Ich habe das nachgeprüft, indem ich zufällige Szenen aus Räumen mit Türen erzeugt und jede Antwort gegen die Breitensuche abgeglichen habe (die Breitensuche ist vollständig, deshalb taugt sie als Orakel). Von 16782 lösbaren Szenen hat der Algorithmus 294 nicht gelöst, also knapp 2 Prozent. Die kleinste davon hat sieben Strecken:
+Der zweite ist ernster. Der Algorithmus kann einen Pfad übersehen, der existiert, und das liegt an der Regel, dass keine Escape-Linie zweimal benutzt wird. Hightower beschreibt den Fall selbst. Wenn das Netz eine Escape-Linie benutzt hat, um durch eine schmale Öffnung in eine Box zu gelangen, kommt es durch dieselbe Öffnung nicht wieder heraus. Er schreibt dazu, in allen seinen Experimenten sei ein Pfad gefunden worden, wenn einer existierte. Ich habe das nachgeprüft, indem ich zufällige Szenen aus Räumen mit Türen erzeugt und jede Antwort gegen die Breitensuche abgeglichen habe (die Breitensuche ist vollständig, deshalb taugt sie als Orakel). Von 16782 lösbaren Szenen hat der Algorithmus 297 nicht gelöst, also knapp 2 Prozent. Die kleinste davon hat sieben Strecken:
 
 ![Eine Box mit einer Lücke von einer Einheit in der rechten Wand, B darin, A oberhalb. Beide Netze haben sich in dem schmalen Streifen rechts neben der Box festgefahren und dort viele kurze Linien gezeichnet. Der graue gestrichelte Pfad, den die Breitensuche gefunden hat, führt links um die Box herum.](images/11_incompleteness.svg)
 
