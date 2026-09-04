@@ -293,10 +293,20 @@ fn trace_is_consistent_with_the_result() {
         assert!(r.steps <= config.max_steps);
         let events = &r.trace.events;
         let mut lines: Vec<(NetId, Segment)> = Vec::new();
+        let mut probes: Vec<(NetId, Segment)> = Vec::new();
+        let mut last_point: [Point; 2] = [a, b];
         let mut intersections = 0;
         let mut no_escape = Vec::new();
         for e in events {
             match e {
+                TraceEvent::ProbeLine { net, line, through } => {
+                    assert!(line.contains(*through), "seed {seed}: {e:?}");
+                    assert!(
+                        o.is_free_segment(line),
+                        "seed {seed}: trial line touches an obstacle"
+                    );
+                    probes.push((*net, *line));
+                }
                 TraceEvent::LineAdded { net, line, through } => {
                     assert!(line.contains(*through), "seed {seed}: {e:?}");
                     assert!(
@@ -313,12 +323,21 @@ fn trace_is_consistent_with_the_result() {
                     lines.push((*net, *line));
                 }
                 TraceEvent::EscapePoint { net, point, .. } => {
-                    // an escape point lies on an earlier line of its own network
+                    // an escape point lies on an earlier line or trial line of
+                    // its own network, or on an escape line of the previous
+                    // escape point (Process II retreat positions sit on the
+                    // object point's other escape line, which need not be entered)
+                    let k = usize::from(*net == NetId::B);
+                    let prev = last_point[k];
                     assert!(
-                        lines.iter().any(|(n, l)| n == net && l.contains(*point)),
+                        lines.iter().any(|(n, l)| n == net && l.contains(*point))
+                            || probes.iter().any(|(n, l)| n == net && l.contains(*point))
+                            || prev.x == point.x
+                            || prev.y == point.y,
                         "seed {seed}: escape point off its network {e:?}"
                     );
                     assert!(o.is_free_point(*point));
+                    last_point[k] = *point;
                 }
                 TraceEvent::Intersection {
                     point,
@@ -349,16 +368,21 @@ fn trace_is_consistent_with_the_result() {
                 assert_eq!(raw.first(), Some(&a));
                 assert_eq!(raw.last(), Some(&b));
                 validate_path(&o, a, b, raw).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
-                // every raw segment runs along a constructed escape line
+                // every raw segment runs along an escape line: an entered one,
+                // a Process II trial line, or the (unentered) escape line of
+                // the object point a retreat position was found on
                 for w in raw.windows(2) {
                     let s = Segment::between(w[0], w[1]).unwrap();
+                    let within = |l: &Segment| {
+                        l.orientation == s.orientation
+                            && l.fixed == s.fixed
+                            && l.from <= s.from
+                            && s.to <= l.to
+                    };
                     assert!(
-                        lines.iter().any(|(_, l)| {
-                            l.orientation == s.orientation
-                                && l.fixed == s.fixed
-                                && l.from <= s.from
-                                && s.to <= l.to
-                        }),
+                        lines.iter().any(|(_, l)| within(l))
+                            || probes.iter().any(|(_, l)| within(l))
+                            || within(&o.escape_line(w[0], s.orientation)),
                         "seed {seed}: raw segment {s:?} is on no escape line"
                     );
                 }
@@ -397,7 +421,7 @@ fn trace_is_consistent_with_the_result() {
 
 #[test]
 fn every_retreat_option_is_sound_and_terminates() {
-    let mut solved = [0usize; 4];
+    let mut solved = [0usize; 2];
     for seed in 0..150u64 {
         let (o, a, b) = if seed % 2 == 0 {
             random_scene(seed + 1000)
@@ -405,15 +429,10 @@ fn every_retreat_option_is_sound_and_terminates() {
             rich_scene(seed + 1000)
         };
         let grid = route_grid(&o, a, b);
-        for (k, (boundary_retreat, recursive_retreat)) in
-            [(false, false), (false, true), (true, false), (true, true)]
-                .into_iter()
-                .enumerate()
-        {
+        for (k, boundary_retreat) in [false, true].into_iter().enumerate() {
             let config = RouterConfig {
                 improve: Improvement::Full,
                 boundary_retreat,
-                recursive_retreat,
                 ..Default::default()
             };
             let r = route_with(&o, a, b, &config);
@@ -429,10 +448,7 @@ fn every_retreat_option_is_sound_and_terminates() {
             }
         }
     }
-    eprintln!(
-        "solved flat {} rec {} bnd {} bnd+rec {}",
-        solved[0], solved[1], solved[2], solved[3]
-    );
+    eprintln!("solved paper {} boundary_retreat {}", solved[0], solved[1]);
     assert!(solved.iter().all(|&n| n > 100), "{solved:?}");
 }
 

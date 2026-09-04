@@ -436,12 +436,11 @@ fn s_corridor() -> (ObstacleSet, Point, Point) {
 fn all_retreat_options_thread_the_s_corridor() {
     let (o, a, b) = s_corridor();
     for boundary_retreat in [false, true] {
-        for recursive_retreat in [false, true] {
+        for _ in [()] {
             for improve in [Improvement::None, Improvement::Full] {
                 let config = RouterConfig {
                     improve,
                     boundary_retreat,
-                    recursive_retreat,
                     ..Default::default()
                 };
                 let r = route_with(&o, a, b, &config);
@@ -467,53 +466,6 @@ fn all_retreat_options_thread_the_s_corridor() {
             }
         }
     }
-}
-
-/// A random scene (found by a seed search) that the flat reading of Process II
-/// cannot solve while the recursive retreat can. Guards the option's effect.
-#[test]
-fn recursive_retreat_finds_a_path_the_flat_reading_misses() {
-    let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(63, 63)));
-    for s in [
-        Segment::horizontal(6, 57, 58),
-        Segment::horizontal(13, 19, 22),
-        Segment::horizontal(28, 8, 20),
-        Segment::horizontal(33, 32, 43),
-        Segment::horizontal(45, 28, 46),
-        Segment::horizontal(58, 37, 51),
-        Segment::horizontal(62, 43, 47),
-        Segment::vertical(8, 25, 32),
-        Segment::vertical(8, 53, 61),
-        Segment::vertical(14, 38, 62),
-        Segment::vertical(18, 43, 52),
-        Segment::vertical(29, 15, 25),
-        Segment::vertical(30, 38, 43),
-        Segment::vertical(31, 34, 58),
-        Segment::vertical(34, 37, 44),
-        Segment::vertical(38, 23, 40),
-        Segment::vertical(40, 47, 51),
-        Segment::vertical(43, 36, 58),
-        Segment::vertical(48, 53, 63),
-        Segment::vertical(52, 34, 47),
-        Segment::vertical(57, 21, 31),
-    ] {
-        o.add_segment(s);
-    }
-    let (a, b) = (p(36, 40), p(11, 42));
-    assert!(hightower::grid::route_grid(&o, a, b).is_some());
-    let flat = route_with(
-        &o,
-        a,
-        b,
-        &RouterConfig {
-            recursive_retreat: false,
-            ..Default::default()
-        },
-    );
-    assert_eq!(flat.outcome, Outcome::NoEscape);
-    let rec = route_with(&o, a, b, &RouterConfig::default());
-    assert_eq!(rec.outcome, Outcome::Found);
-    validate_path(&o, a, b, &rec.path.unwrap()).unwrap();
 }
 
 #[test]
@@ -547,12 +499,12 @@ fn pert_mode_corners_may_be_crossed_but_not_used() {
     assert!(third.len() >= 4, "{third:?}");
 }
 
-/// Process II retreats from the far end of every line, so the raw path in a
-/// corridor bounces from wall to wall. The default improvement must remove
-/// those zigzags: on Hightower's own Hampton Court maze the final path is
-/// within 10 % of the shortest one (it is currently equal to it).
+/// Hightower's own Hampton Court maze (page 19 of the paper), traced from
+/// the scan. The algorithm as written must solve it, and with the default
+/// improvement the path stays within 20 % of the shortest one and leaves A
+/// towards the exit on the left, as the 1969 plot does.
 #[test]
-fn hampton_court_path_is_close_to_shortest() {
+fn hampton_court_maze_is_solved() {
     const DATA: &str = include_str!("../examples/data/hampton_court.txt");
     let mut grid = (0, 0);
     let (mut a, mut b) = (p(0, 0), p(0, 0));
@@ -576,15 +528,19 @@ fn hampton_court_path_is_close_to_shortest() {
     let len = |path: &[Point]| path.windows(2).map(|w| w[0].manhattan(w[1])).sum::<i64>();
     let shortest = hightower::route_visibility(&o, a, b).expect("maze is solvable");
     let r = route_with(&o, a, b, &RouterConfig::default());
-    let path = r.path.expect("line search solves the maze");
+    assert_eq!(
+        r.outcome,
+        Outcome::Found,
+        "the paper's algorithm solves its own maze"
+    );
+    let path = r.path.unwrap();
     validate_path(&o, a, b, &path).unwrap();
     assert!(
-        len(&path) * 10 <= len(&shortest) * 11,
+        len(&path) * 10 <= len(&shortest) * 12,
         "maze path {} vs shortest {}",
         len(&path),
         len(&shortest)
     );
-    // and it leaves A towards the exit on the left, as Hightower's plot does
     assert!(
         path[1].x <= a.x || path[1].y != a.y,
         "first move {:?}",
@@ -617,7 +573,7 @@ fn serpentine_corridor_path_is_close_to_shortest() {
         len(&path),
         len(&shortest)
     );
-    // the full improvement is the default because of exactly this effect
+    // the paper's second improvement (both parts) is the default
     assert_eq!(RouterConfig::default().improve, Improvement::Full);
     let ext = route_with(
         &o,

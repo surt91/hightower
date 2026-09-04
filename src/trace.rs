@@ -43,6 +43,18 @@ pub enum TraceEvent {
         /// The escape point the line was drawn through.
         through: Point,
     },
+    /// Escape Process II constructed a trial line through a retreat position.
+    /// Trial lines are tested for intersections and searched with Process I,
+    /// but they are not entered in the network unless the position becomes an
+    /// escape point.
+    ProbeLine {
+        /// Owning network.
+        net: NetId,
+        /// The trial line.
+        line: Segment,
+        /// The retreat position it was drawn through.
+        through: Point,
+    },
     /// A network accepted a new escape point (which becomes its object point).
     EscapePoint {
         /// Owning network.
@@ -102,7 +114,15 @@ impl Trace {
         self.events.is_empty()
     }
 
-    /// Number of escape lines constructed by both networks together.
+    /// Number of trial lines Process II constructed (not entered in the networks).
+    pub fn probe_count(&self) -> usize {
+        self.events
+            .iter()
+            .filter(|e| matches!(e, TraceEvent::ProbeLine { .. }))
+            .count()
+    }
+
+    /// Number of escape lines entered by both networks together.
     pub fn line_count(&self) -> usize {
         self.events
             .iter()

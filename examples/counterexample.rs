@@ -92,16 +92,10 @@ fn main() {
     let mut best: Option<(u64, usize)> = None;
     let mut misses = 0;
     let mut misses_retreat = 0;
-    let mut misses_flat = 0;
     let mut lines_default = 0usize;
-    let mut lines_flat = 0usize;
     let mut solvable = 0;
     let retreat = RouterConfig {
         boundary_retreat: true,
-        ..RouterConfig::default()
-    };
-    let flat = RouterConfig {
-        recursive_retreat: false,
         ..RouterConfig::default()
     };
     for seed in 0..tries {
@@ -123,19 +117,13 @@ fn main() {
         if route_with(&o, a, b, &retreat).path.is_none() {
             misses_retreat += 1;
         }
-        let rr = route_with(&o, a, b, &flat);
-        lines_flat += rr.trace.line_count();
-        if rr.path.is_none() {
-            misses_flat += 1;
-        }
     }
     println!(
-        "{solvable} solvable scenes, {misses} missed by the line router ({misses_retreat} with boundary_retreat, {misses_flat} without recursive_retreat)"
+        "{solvable} solvable scenes, {misses} missed by the line router ({misses_retreat} with boundary_retreat)"
     );
     println!(
-        "lines per scene: {:.1} default, {:.1} without recursive_retreat",
-        lines_default as f64 / solvable as f64,
-        lines_flat as f64 / solvable as f64
+        "lines per scene: {:.1}",
+        lines_default as f64 / solvable as f64
     );
     let Some((seed, _)) = best else {
         println!("no counterexample found");

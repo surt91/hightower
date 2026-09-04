@@ -97,16 +97,22 @@ pub(crate) enum ProcessOutcome {
     Failed,
 }
 
-/// Escape Process II at object point `z` (tree node `z_id`).
+/// Escape Process II at object point `z` (tree node `z_id`), after Figure 6
+/// of the paper.
 ///
-/// The ends of `z`'s escape lines that are bounded by a cover walk back toward
-/// `z` one unit at a time, round-robin. Ends on the bounding box are skipped
-/// as in the paper, unless [`RouterConfig::boundary_retreat`] is set. With
-/// [`RouterConfig::recursive_retreat`] the retreat continues along the probe
-/// lines themselves. At every position `r` whose perpendicular escape line is
-/// still unused, that line is constructed and tested against the other
-/// network; then Process I is tried *at `r`*. If it succeeds, `r` and the
-/// Process I point both become escape points (in that order).
+/// The four retreat positions start where `z`'s escape lines meet their
+/// covers and walk back toward `z` one unit at a time, round-robin. At every
+/// position `r_i` the perpendicular escape line through `r_i` is constructed
+/// as a *trial* line: it is tested against the other network, and Process I
+/// is tried at `r_i`. Only when `r_i` becomes an escape point does anything
+/// stay behind; a trial line that led nowhere is forgotten and does **not**
+/// count as "previously used" (the text says "enter the line in L" for the
+/// object point's line in P1, but only "construct" here). Keeping failed
+/// trial lines poisons the search and, for instance, makes the paper's own
+/// Hampton Court maze unsolvable.
+///
+/// Ends on the bounding box have no cover and therefore no retreat position,
+/// unless [`RouterConfig::boundary_retreat`] is set.
 pub(crate) fn process_ii(
     obstacles: &ObstacleSet,
     net: &mut Network,
@@ -119,10 +125,6 @@ pub(crate) fn process_ii(
     let v = obstacles.escape_line(z, Orientation::Vertical);
     let h = obstacles.escape_line(z, Orientation::Horizontal);
     let bounds = obstacles.bounds();
-    // The paper defines r_i as the intersection of an escape line with the
-    // cover that bounds it. An end that lies on the bounding box has no cover
-    // and therefore no retreat position unless `boundary_retreat` is set; we
-    // mark such ends as exhausted (== z).
     let end = |point: Point, on_boundary: bool| {
         if on_boundary && !config.boundary_retreat {
             z
@@ -136,7 +138,7 @@ pub(crate) fn process_ii(
         end(Point::new(z.x, v.from), v.from == bounds.min.y), // bottom end
         end(Point::new(h.from, z.y), h.from == bounds.min.x), // left end
     ];
-    // Orientation of the new line through r[i]: perpendicular to the line it sits on.
+    // Orientation of the trial line through r[i]: perpendicular to the line it sits on.
     const NEW: [Orientation; 4] = [
         Orientation::Horizontal,
         Orientation::Vertical,
@@ -153,53 +155,40 @@ pub(crate) fn process_ii(
                 continue;
             }
             let probe = obstacles.escape_line(r[i], NEW[i]);
-            if !net.is_used(&probe) {
+            trace.push(TraceEvent::ProbeLine {
+                net: net.id,
+                line: probe,
+                through: r[i],
+            });
+            if let Some((point, line_other)) = other.find_crossing(&probe) {
                 let r_id = net.push_point(r[i], Some(z_id));
-                let line_here = net.add_line(probe, r_id, trace);
-                if let Some((point, line_other)) = other.find_crossing(&probe) {
-                    trace.push(TraceEvent::EscapePoint {
-                        net: net.id,
-                        point: r[i],
-                        process: Process::II,
-                    });
-                    return ProcessOutcome::Intersection {
-                        point,
-                        line_here,
-                        line_other,
-                    };
-                }
-                if let Some((e, o)) = process_i(obstacles, net, r[i]) {
-                    trace.push(TraceEvent::EscapePoint {
-                        net: net.id,
-                        point: r[i],
-                        process: Process::II,
-                    });
-                    net.push_point(e, Some(r_id));
-                    net.flag = Flag::One(o);
-                    trace.push(TraceEvent::EscapePoint {
-                        net: net.id,
-                        point: e,
-                        process: Process::I,
-                    });
-                    return ProcessOutcome::Escaped;
-                }
-                // Recursive reading of "try to find a Process I escape point
-                // ... as outlined in the Escape Algorithm": retreat along the
-                // new probe line as well. Terminates because every level
-                // constructs at least one new line.
-                if config.recursive_retreat {
-                    match process_ii(obstacles, net, other, r_id, r[i], config, trace) {
-                        ProcessOutcome::Failed => {}
-                        outcome => {
-                            trace.push(TraceEvent::EscapePoint {
-                                net: net.id,
-                                point: r[i],
-                                process: Process::II,
-                            });
-                            return outcome;
-                        }
-                    }
-                }
+                let line_here = net.line_id_or_add(probe, r_id, trace);
+                trace.push(TraceEvent::EscapePoint {
+                    net: net.id,
+                    point: r[i],
+                    process: Process::II,
+                });
+                return ProcessOutcome::Intersection {
+                    point,
+                    line_here,
+                    line_other,
+                };
+            }
+            if let Some((e, o)) = process_i(obstacles, net, r[i]) {
+                let r_id = net.push_point(r[i], Some(z_id));
+                trace.push(TraceEvent::EscapePoint {
+                    net: net.id,
+                    point: r[i],
+                    process: Process::II,
+                });
+                net.push_point(e, Some(r_id));
+                net.flag = Flag::One(o);
+                trace.push(TraceEvent::EscapePoint {
+                    net: net.id,
+                    point: e,
+                    process: Process::I,
+                });
+                return ProcessOutcome::Escaped;
             }
             r[i] = toward(r[i], z);
         }

@@ -11,9 +11,7 @@ use std::fs;
 use std::time::{Duration, Instant};
 
 use hightower::svg::{Canvas, Layers, Style};
-use hightower::{
-    Bounds, ObstacleSet, Outcome, Point, RouterConfig, Segment, route_visibility, route_with,
-};
+use hightower::{Bounds, ObstacleSet, Outcome, Point, RouterConfig, Segment, route_with};
 
 const DATA: &str = include_str!("data/hampton_court.txt");
 
@@ -67,49 +65,61 @@ fn hours(d: Duration) -> String {
 fn main() {
     let maze = load();
     let (a, b) = (maze.a, maze.b);
-    let config = RouterConfig::default();
+    println!("SOLUTION TO HAMPTON COURT MAZE");
+    println!("{} walls, A = {a:?}, B = {b:?}", maze.obstacles.len());
+    fs::create_dir_all("out").expect("create out/");
 
-    // time it: median over many runs, the maze is small
-    let runs = 2000;
+    let (result, median) = timed(&maze, &RouterConfig::default());
+    report(&result, median);
+    draw(
+        &maze,
+        &result,
+        median,
+        "out/maze.svg",
+        "(gray: the path plotted in 1969, red: this implementation)",
+    );
+    fs::write("out/maze_trace.svg", String::new()).ok();
+    draw_trace(&maze, &result, "out/maze_trace.svg");
+}
+
+/// Median run time over many runs plus one traced run.
+fn timed(maze: &Maze, config: &RouterConfig) -> (hightower::RouteResult, Duration) {
+    let runs = 500;
     let mut times: Vec<Duration> = (0..runs)
         .map(|_| {
             let t = Instant::now();
-            std::hint::black_box(route_with(&maze.obstacles, a, b, &config));
+            std::hint::black_box(route_with(&maze.obstacles, maze.a, maze.b, config));
             t.elapsed()
         })
         .collect();
     times.sort();
-    let median = times[runs / 2];
-    let result = route_with(&maze.obstacles, a, b, &config);
+    (
+        route_with(&maze.obstacles, maze.a, maze.b, config),
+        times[runs / 2],
+    )
+}
 
-    println!("SOLUTION TO HAMPTON COURT MAZE");
-    println!("{} walls, A = {a:?}, B = {b:?}", maze.obstacles.len());
+fn report(result: &hightower::RouteResult, median: Duration) {
     match result.outcome {
         Outcome::Found => println!("FOUND PATH FROM A TO B"),
         other => println!("NO PATH ({other:?})"),
     }
     println!(
-        "TOTAL TIME {}  (that is {median:?}; {} steps, {} lines)",
+        "TOTAL TIME {}  (that is {median:?}; {} steps, {} lines entered, {} trial lines{})",
         hours(median),
         result.steps,
-        result.trace.line_count()
+        result.trace.line_count(),
+        result.trace.probe_count(),
+        result
+            .path
+            .as_ref()
+            .map(|p| format!(", {} corners", p.len()))
+            .unwrap_or_default()
     );
+}
 
-    // Hightower's router is not complete; if it gives up here, say so and
-    // show the visibility-graph route instead.
-    let (path, label) = match &result.path {
-        Some(p) => (p.clone(), format!("TOTAL TIME {}", hours(median))),
-        None => {
-            let vis = route_visibility(&maze.obstacles, a, b).expect("the maze has a solution");
-            println!("(falling back to the visibility graph for the drawing)");
-            (
-                vis,
-                "NO PATH FOUND BY LINE SEARCH; VISIBILITY GRAPH SHOWN".to_string(),
-            )
-        }
-    };
-
-    fs::create_dir_all("out").expect("create out/");
+/// Draws the maze, Hightower's 1969 path in gray, our networks and path.
+fn draw(maze: &Maze, result: &hightower::RouteResult, median: Duration, file: &str, note: &str) {
     let bounds = maze.obstacles.bounds();
     // 224 units on 900 px: one unit of clearance is 4 px, the path 3 px wide,
     // so the walls stay visible next to it.
@@ -122,45 +132,55 @@ fn main() {
         labels: true,
         ..Style::fit(bounds, 900.0)
     };
-    let paper = |with_trace: bool| {
-        let mut c = Canvas::new(bounds, style.clone());
-        c.frame();
-        for s in &maze.paper_path {
-            c.segment(s, "#d9d9d9", style.path_width * 2.5, "");
-        }
-        c.obstacles(&maze.obstacles);
-        if with_trace {
-            c.trace(
-                &result.trace,
-                result.trace.len(),
-                Layers {
-                    final_path: false,
-                    ..Layers::default()
-                },
-            );
-        }
-        c.polyline(&path, style.path, style.path_width, "");
-        c.endpoints(a, b);
-        let mono = |c: &mut Canvas, y: f64, text: &str| {
-            c.raw(&format!(
-                r##"<text x="50%" y="{y:.0}" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="{}" fill="#111">{}</text>"##,
-                style.font_size, text
-            ));
-        };
-        mono(&mut c, 24.0, "SOLUTION TO HAMPTON COURT MAZE");
-        mono(&mut c, 46.0, "FOUND PATH FROM A TO B");
-        mono(&mut c, 64.0, &label);
-        mono(
-            &mut c,
-            84.0,
-            "(gray: the path plotted in 1969, red: this implementation)",
-        );
-        c.finish()
+    let mut c = Canvas::new(bounds, style.clone());
+    c.frame();
+    for s in &maze.paper_path {
+        c.segment(s, "#d9d9d9", style.path_width * 2.5, "");
+    }
+    c.obstacles(&maze.obstacles);
+    if let Some(path) = &result.path {
+        c.polyline(path, style.path, style.path_width, "");
+    } else {
+        c.trace(&result.trace, result.trace.len(), Layers::default());
+    }
+    c.endpoints(maze.a, maze.b);
+    let mono = |c: &mut Canvas, y: f64, text: &str| {
+        c.raw(&format!(
+            r##"<text x="50%" y="{y:.0}" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="{}" fill="#111">{}</text>"##,
+            style.font_size, text
+        ));
     };
-    fs::write("out/maze.svg", paper(false)).expect("write svg");
-    fs::write("out/maze_trace.svg", paper(true)).expect("write svg");
-    println!(
-        "path with {} corners; wrote out/maze.svg and out/maze_trace.svg",
-        path.len()
+    mono(&mut c, 24.0, "SOLUTION TO HAMPTON COURT MAZE");
+    mono(
+        &mut c,
+        46.0,
+        if result.path.is_some() {
+            "FOUND PATH FROM A TO B"
+        } else {
+            "NO PATH FOUND FROM A TO B"
+        },
     );
+    mono(&mut c, 64.0, &format!("TOTAL TIME {}", hours(median)));
+    mono(&mut c, 84.0, note);
+    fs::write(file, c.finish()).expect("write svg");
+    println!("wrote {file}");
+}
+
+/// Both networks with all trial lines, for the curious.
+fn draw_trace(maze: &Maze, result: &hightower::RouteResult, file: &str) {
+    let bounds = maze.obstacles.bounds();
+    let style = Style {
+        margin: 6.0,
+        obstacle_width: 2.0,
+        path_width: 3.0,
+        dot_radius: 2.0,
+        ..Style::fit(bounds, 900.0)
+    };
+    let mut c = Canvas::new(bounds, style.clone());
+    c.frame();
+    c.obstacles(&maze.obstacles);
+    c.trace(&result.trace, result.trace.len(), Layers::default());
+    c.endpoints(maze.a, maze.b);
+    fs::write(file, c.finish()).expect("write svg");
+    println!("wrote {file}");
 }

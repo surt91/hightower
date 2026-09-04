@@ -83,6 +83,7 @@ impl Style {
 #[allow(missing_docs)]
 pub struct Layers {
     pub lines: bool,
+    pub probes: bool,
     pub escape_points: bool,
     pub intersection: bool,
     pub raw_path: bool,
@@ -93,6 +94,7 @@ impl Default for Layers {
     fn default() -> Self {
         Layers {
             lines: true,
+            probes: true,
             escape_points: true,
             intersection: true,
             raw_path: false,
@@ -264,6 +266,18 @@ impl Canvas {
     pub fn trace(&mut self, trace: &Trace, upto: usize, layers: Layers) {
         let events = &trace.events[..upto.min(trace.events.len())];
         let style = self.style.clone();
+        if layers.probes {
+            for e in events {
+                if let TraceEvent::ProbeLine { net, line, .. } = e {
+                    self.segment(
+                        line,
+                        style.color(*net),
+                        style.line_width * 0.7,
+                        r#"stroke-opacity="0.35" stroke-dasharray="3 3""#,
+                    );
+                }
+            }
+        }
         if layers.lines {
             for e in events {
                 if let TraceEvent::LineAdded { net, line, .. } = e {

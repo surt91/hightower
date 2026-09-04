@@ -40,6 +40,7 @@ fn main() {
     for (i, e) in result.trace.events.iter().enumerate() {
         let label = match e {
             TraceEvent::LineAdded { net, line, .. } => format!("{net:?}: line {line:?}"),
+            TraceEvent::ProbeLine { net, line, .. } => format!("{net:?}: trial line {line:?}"),
             TraceEvent::EscapePoint {
                 net,
                 point,

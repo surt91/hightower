@@ -73,6 +73,19 @@ impl Network {
         self.points.len() - 1
     }
 
+    /// The id of an already constructed line identical to `segment`, or the
+    /// id of `segment` after adding it.
+    pub fn line_id_or_add(&mut self, segment: Segment, through: usize, trace: &mut Trace) -> usize {
+        match self
+            .lines
+            .iter()
+            .position(|l| l.segment.overlaps_collinear(&segment))
+        {
+            Some(id) => id,
+            None => self.add_line(segment, through, trace),
+        }
+    }
+
     pub fn add_line(&mut self, segment: Segment, through: usize, trace: &mut Trace) -> usize {
         self.lines.push(EscapeLine { segment, through });
         trace.push(TraceEvent::LineAdded {
@@ -134,18 +147,6 @@ pub struct RouterConfig {
     /// paths. Enabling this finds more paths at the price of many probe
     /// lines in open scenes (up to one per unit of the bounding box).
     pub boundary_retreat: bool,
-    /// Let Escape Process II recurse: when neither the retreat position nor
-    /// Process I at it leads anywhere, retreat along the freshly constructed
-    /// probe line as well.
-    ///
-    /// The paper's wording ("try to find a Process I escape point on either
-    /// of the two escape lines as outlined in the Escape Algorithm") admits
-    /// this reading, and it is what lets the router thread long corridors
-    /// such as the Hampton Court maze, which the flat reading cannot.
-    /// Termination is unaffected (every level constructs a new line); the
-    /// number of lines grows only slightly (about 7 % on random room scenes).
-    /// Default: `true`.
-    pub recursive_retreat: bool,
 }
 
 impl Default for RouterConfig {
@@ -154,7 +155,6 @@ impl Default for RouterConfig {
             max_steps: 10_000,
             improve: Improvement::Full,
             boundary_retreat: false,
-            recursive_retreat: true,
         }
     }
 }
