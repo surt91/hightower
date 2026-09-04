@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 BLUE = "#1f6fd6"   # Hightower (same blue as network A in the SVG figures)
 RED = "#d62828"    # grid BFS (same red as the final path)
+GREEN = "#2a9d5c"  # visibility graph + A* (same green as network B)
 INK = "#0b0b0b"
 INK2 = "#52514e"
 GRID = "#e6e6e3"
@@ -57,9 +58,14 @@ def series(ax, data, xkey):
     xs = [int(r[xkey]) for r in data]
     h = [int(r["hightower_ns"]) for r in data]
     g = [int(r["grid_ns"]) for r in data]
-    ax.plot(xs, g, color=RED, linewidth=2, marker="o", markersize=6, markeredgecolor=SURFACE, markeredgewidth=1.5)
-    ax.plot(xs, h, color=BLUE, linewidth=2, marker="o", markersize=6, markeredgecolor=SURFACE, markeredgewidth=1.5)
+    v = [int(r["visibility_ns"]) for r in data]
+    mark = dict(linewidth=2, marker="o", markersize=6, markeredgecolor=SURFACE, markeredgewidth=1.5)
+    ax.plot(xs, g, color=RED, **mark)
+    ax.plot(xs, v, color=GREEN, **mark)
+    ax.plot(xs, h, color=BLUE, **mark)
     ax.annotate("Gitter-BFS (Lee)", (xs[0], g[0]), xytext=(0, 12), textcoords="offset points",
+                ha="left", color=INK, fontsize=11)
+    ax.annotate("Sichtbarkeitsgraph + A*", (xs[0], v[0]), xytext=(0, 12), textcoords="offset points",
                 ha="left", color=INK, fontsize=11)
     ax.annotate("Hightower", (xs[0], h[0]), xytext=(0, -20), textcoords="offset points",
                 ha="left", color=INK, fontsize=11)

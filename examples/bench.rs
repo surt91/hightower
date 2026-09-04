@@ -1,5 +1,5 @@
-//! Micro-benchmark: Hightower's line router vs. the naive grid BFS on the
-//! same scenes. Writes `out/bench.csv` (one row per measurement).
+//! Micro-benchmark: Hightower's line router vs. the naive grid BFS vs. A* on
+//! the orthogonal visibility graph, on the same scenes. Writes `out/bench.csv` (one row per measurement).
 //!
 //! Series A: board side length grows, the number of obstacles stays fixed
 //! (obstacle positions scale with the board).
@@ -10,7 +10,7 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use hightower::grid::route_grid;
-use hightower::{Bounds, ObstacleSet, Point, route};
+use hightower::{Bounds, ObstacleSet, Point, route, route_visibility};
 
 struct Rng(u64);
 
@@ -51,10 +51,11 @@ fn scene(seed: u64, side: i64, count: usize) -> (ObstacleSet, Point, Point) {
     (o, a, b)
 }
 
-/// Median time of `f` over several scenes; only scenes both routers solve.
-fn measure(side: i64, count: usize, scenes: usize) -> (Duration, Duration, usize) {
+/// Median times over several scenes; only scenes all routers solve.
+fn measure(side: i64, count: usize, scenes: usize) -> (Duration, Duration, Duration, usize) {
     let mut ht = Vec::new();
     let mut gr = Vec::new();
+    let mut vi = Vec::new();
     let mut misses = 0;
     let mut seed = 0;
     while ht.len() < scenes {
@@ -81,41 +82,50 @@ fn measure(side: i64, count: usize, scenes: usize) -> (Duration, Duration, usize
             black_box(route_grid(black_box(&o), a, b));
         }
         gr.push(t.elapsed() / reps);
+        let reps = 5;
+        let t = Instant::now();
+        for _ in 0..reps {
+            black_box(route_visibility(black_box(&o), a, b));
+        }
+        vi.push(t.elapsed() / reps);
     }
     ht.sort();
     gr.sort();
-    (ht[ht.len() / 2], gr[gr.len() / 2], misses)
+    vi.sort();
+    (ht[ht.len() / 2], gr[gr.len() / 2], vi[vi.len() / 2], misses)
 }
 
 fn main() {
     fs::create_dir_all("out").expect("create out/");
-    let mut csv = String::from("series,side,obstacles,hightower_ns,grid_ns,misses\n");
+    let mut csv = String::from("series,side,obstacles,hightower_ns,grid_ns,visibility_ns,misses\n");
     println!(
-        "{:>8} {:>6} {:>10} {:>14} {:>14} {:>6}",
-        "series", "side", "obstacles", "hightower", "grid", "misses"
+        "{:>8} {:>6} {:>10} {:>14} {:>14} {:>14} {:>6}",
+        "series", "side", "obstacles", "hightower", "grid", "visibility", "misses"
     );
     for side in [64, 128, 256, 512, 1024, 2048] {
-        let (h, g, misses) = measure(side, 20, 41);
+        let (h, g, v, misses) = measure(side, 20, 41);
         println!(
-            "{:>8} {side:>6} {:>10} {:>14?} {:>14?} {misses:>6}",
-            "area", 20, h, g
+            "{:>8} {side:>6} {:>10} {:>14?} {:>14?} {:>14?} {misses:>6}",
+            "area", 20, h, g, v
         );
         csv.push_str(&format!(
-            "area,{side},20,{},{},{misses}\n",
+            "area,{side},20,{},{},{},{misses}\n",
             h.as_nanos(),
-            g.as_nanos()
+            g.as_nanos(),
+            v.as_nanos()
         ));
     }
     for count in [0, 5, 10, 20, 40, 80, 160, 320] {
-        let (h, g, misses) = measure(256, count, 41);
+        let (h, g, v, misses) = measure(256, count, 41);
         println!(
-            "{:>8} {:>6} {count:>10} {:>14?} {:>14?} {misses:>6}",
-            "clutter", 256, h, g
+            "{:>8} {:>6} {count:>10} {:>14?} {:>14?} {:>14?} {misses:>6}",
+            "clutter", 256, h, g, v
         );
         csv.push_str(&format!(
-            "clutter,256,{count},{},{},{misses}\n",
+            "clutter,256,{count},{},{},{},{misses}\n",
             h.as_nanos(),
-            g.as_nanos()
+            g.as_nanos(),
+            v.as_nanos()
         ));
     }
     fs::write("out/bench.csv", csv).expect("write csv");

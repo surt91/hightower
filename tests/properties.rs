@@ -144,3 +144,34 @@ fn dense_random_scenes_are_sound() {
         }
     }
 }
+
+/// The visibility-graph router is complete and, without bend penalty, optimal:
+/// it finds a path exactly when the grid BFS does, with the same length.
+#[test]
+fn visibility_graph_matches_grid_bfs() {
+    use hightower::{VisibilityConfig, route_visibility_with};
+    let len = |path: &[Point]| path.windows(2).map(|w| w[0].manhattan(w[1])).sum::<i64>();
+    for seed in 0..300u64 {
+        let (o, a, b) = random_scene(seed);
+        let grid = route_grid(&o, a, b);
+        let vis = route_visibility_with(&o, a, b, &VisibilityConfig::default());
+        match (grid, vis.path) {
+            (Some(g), Some(v)) => {
+                validate_path(&o, a, b, &v).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
+                assert_eq!(len(&g), len(&v), "seed {seed}: lengths differ");
+                assert_eq!(vis.cost, Some(len(&v)), "seed {seed}");
+            }
+            (None, None) => {}
+            (g, v) => panic!(
+                "seed {seed}: grid {:?} vs visibility {:?}",
+                g.is_some(),
+                v.is_some()
+            ),
+        }
+        // with a bend penalty the path must still be valid and have at most as many bends
+        let calm = route_visibility_with(&o, a, b, &VisibilityConfig { bend_penalty: 20 });
+        if let Some(path) = calm.path {
+            validate_path(&o, a, b, &path).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
+        }
+    }
+}

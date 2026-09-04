@@ -24,8 +24,8 @@ the other, a path exists and is read off the two trees.
   are not guaranteed to be shortest.
 * **Not complete.** Escape lines are never reused. That guarantees termination
   but means a path can be missed even though it exists. Callers must handle
-  `None` for connected instances, e.g. with a grid search as fallback
-  (`hightower::grid::route_grid`).
+  `None` for connected instances, e.g. by falling back to the visibility-graph
+  router below.
 * **Exact.** All coordinates are `i64`; one unit is the minimum clearance
   between the path and any obstacle. No floating point, no dependencies.
 
@@ -59,6 +59,30 @@ Already routed paths can be added as obstacles (`add_path`) or only their
 corners (`add_path_corners`, the paper's PERT-diagram mode) before routing the
 next connection.
 
+## Reference routers
+
+Two more routers solve the same problem and serve as oracle, fallback and
+benchmark baseline:
+
+* `hightower::route_visibility` – A\* over the **orthogonal visibility graph**
+  (Wybrow, Marriott, Stuckey, *Orthogonal Connector Routing*, GD 2009; the
+  approach behind libavoid). The lines through every obstacle side (pushed one
+  unit outward) and through both endpoints form a sparse grid; A\* searches it
+  without materialising it. Complete, grid-free, and optimal for
+  `length + bend_penalty * bends` (`VisibilityConfig`). With `bend_penalty: 0`
+  it returns a shortest path. Roughly 5–10× slower than Hightower on typical
+  diagram scenes, but it never misses a path.
+* `hightower::grid::route_grid` – a naive Lee-style BFS on the unit lattice.
+  Complete and shortest, but cost grows with the area. Used as the oracle in
+  the property tests.
+
+```rust
+use hightower::{VisibilityConfig, route_visibility_with};
+
+let calm = route_visibility_with(&obstacles, a, b, &VisibilityConfig { bend_penalty: 20 });
+// calm.path: fewest-bend route for that trade-off; calm.cost, calm.expanded for diagnostics
+```
+
 ## Examples
 
 ```sh
@@ -67,7 +91,7 @@ cargo run --release --example animate         # one SVG per trace event -> out/f
 cargo run --release --example maze            # a hedge maze, as in the paper -> out/maze.svg
 cargo run --release --example counterexample  # searches scenes the router cannot solve
 cargo run --release --example blog_figures    # all figures of the blog post -> out/blog/
-cargo run --release --example bench           # Hightower vs. grid BFS -> out/bench.csv
+cargo run --release --example bench           # Hightower vs. grid BFS vs. visibility graph -> out/bench.csv
 python3 scripts/plot_bench.py                 # -> out/blog/12_benchmark.svg
 ```
 
@@ -84,6 +108,8 @@ python3 scripts/plot_bench.py                 # -> out/blog/12_benchmark.svg
 * `refine.rs` – path reconstruction from the escape-point trees, collinear
   cleanup, the paper's second improvement (segment extension, optional
   perpendicular probing) and a validity checker.
+* `visibility.rs` – orthogonal visibility graph plus A\* (complete, shortest
+  or bend-optimised); the modern reference and the recommended fallback.
 * `grid.rs` – a naive Lee-style BFS used as oracle in tests and as the
   baseline in the benchmark.
 
@@ -104,7 +130,8 @@ cargo test
 Scenario tests in `tests/routing.rs` follow the plan; `tests/properties.rs`
 routes hundreds of random scenes and checks every result against the grid
 BFS: whenever Hightower returns a path, it is valid and BFS agrees that one
-exists.
+exists, and the visibility-graph router finds a path exactly when BFS does,
+with the same length.
 
 ## License
 

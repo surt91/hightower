@@ -9,7 +9,7 @@ use hightower::svg::{
 };
 use hightower::{
     Bounds, Improvement, ObstacleSet, Orientation, Point, RouterConfig, Segment, TraceEvent,
-    route_with,
+    VisibilityConfig, VisibilityGraph, route_with,
 };
 
 fn p(x: i64, y: i64) -> Point {
@@ -431,8 +431,61 @@ fn fig_counterexample() {
     write("11_incompleteness", &c.finish());
 }
 
+/// The orthogonal visibility graph of the diagram scene, with the A* path
+/// (bend penalty 0 left, 20 right), next to Hightower's five lines.
+fn fig_visibility_graph() {
+    let (o, a, b) = diagram_scene();
+    let scene = Scene {
+        obstacles: &o,
+        a,
+        b,
+    };
+    let style = Style::fit(o.bounds(), 480.0);
+    let graph = VisibilityGraph::new(&o, &[a, b]);
+    let edges = graph.edges();
+    let mut panels = Vec::new();
+    for penalty in [0, 20] {
+        let r = graph.route(
+            a,
+            b,
+            &VisibilityConfig {
+                bend_penalty: penalty,
+            },
+        );
+        let path = r.path.as_deref().expect("path");
+        println!(
+            "visibility (penalty {penalty}): {} nodes, {} edges, {} expanded, {} corners, cost {:?}",
+            r.graph_nodes,
+            edges.len(),
+            r.expanded,
+            path.len(),
+            r.cost
+        );
+        let mut c = Canvas::new(o.bounds(), style.clone());
+        c.frame();
+        for e in &edges {
+            c.segment(e, "#b8c4d8", 1.0, "");
+        }
+        for &x in graph.xs() {
+            for &y in graph.ys() {
+                let q = p(x, y);
+                if o.is_free_point(q) {
+                    c.dot(q, "#8fa3c4", 1.3);
+                }
+            }
+        }
+        c.obstacles(&o);
+        c.polyline(path, style.path, style.path_width, "");
+        c.endpoints(a, b);
+        panels.push(c.finish());
+    }
+    write("13_visibility_graph", &two_up(&panels[0], &panels[1], 30.0));
+    let _ = scene;
+}
+
 fn main() {
     fs::create_dir_all("out/blog").expect("create out/blog");
+    fig_visibility_graph();
     fig_hero();
     fig_staircase();
     fig_covers();

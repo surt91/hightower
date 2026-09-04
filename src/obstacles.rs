@@ -18,6 +18,9 @@ pub struct ObstacleSet {
     bounds: Bounds,
     horizontal: BTreeMap<Coord, Vec<(Coord, Coord)>>,
     vertical: BTreeMap<Coord, Vec<(Coord, Coord)>>,
+    /// Rectangles added with [`add_rect`](Self::add_rect); their edges are also
+    /// in the maps. Kept so that the visibility graph can skip the inside.
+    rects: Vec<(Point, Point)>,
 }
 
 impl ObstacleSet {
@@ -27,6 +30,7 @@ impl ObstacleSet {
             bounds,
             horizontal: BTreeMap::new(),
             vertical: BTreeMap::new(),
+            rects: Vec::new(),
         }
     }
 
@@ -51,6 +55,12 @@ impl ObstacleSet {
         self.add_segment(Segment::horizontal(y2, x1, x2));
         self.add_segment(Segment::vertical(x1, y1, y2));
         self.add_segment(Segment::vertical(x2, y1, y2));
+        self.rects.push((Point::new(x1, y1), Point::new(x2, y2)));
+    }
+
+    /// Rectangles added with [`add_rect`](Self::add_rect), as `(min, max)` corners.
+    pub fn rects(&self) -> &[(Point, Point)] {
+        &self.rects
     }
 
     /// Adds a rectilinear polyline (e.g. an already routed path) as obstacles,

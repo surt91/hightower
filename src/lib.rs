@@ -41,6 +41,13 @@
 //! For the full record of what the router did (every escape line, escape point
 //! and intersection) use [`route_with`] and render the [`Trace`] with the
 //! [`svg`] module.
+//!
+//! Two reference routers ship alongside: [`grid::route_grid`], a Lee-style
+//! breadth-first search on the unit lattice (complete, shortest, cost grows
+//! with the area), and [`route_visibility`], A* over the orthogonal visibility
+//! graph (complete, shortest or bend-optimised, cost grows with the number of
+//! obstacles). The latter is the modern standard for diagram editors and the
+//! natural fallback when Hightower returns `None`.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -53,9 +60,13 @@ pub mod refine;
 pub mod router;
 pub mod svg;
 pub mod trace;
+pub mod visibility;
 
 pub use geometry::{Bounds, Coord, Orientation, Point, Segment};
 pub use obstacles::ObstacleSet;
 pub use refine::{cleanup, validate_path};
 pub use router::{Improvement, Outcome, RouteResult, RouterConfig, route, route_with};
 pub use trace::{NetId, Process, Trace, TraceEvent};
+pub use visibility::{
+    VisibilityConfig, VisibilityGraph, VisibilityResult, route_visibility, route_visibility_with,
+};
