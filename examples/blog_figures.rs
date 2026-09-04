@@ -4,7 +4,9 @@
 use std::fs;
 
 use hightower::grid::flood;
-use hightower::svg::{Canvas, Layers, Scene, Style, render, render_flood, render_path};
+use hightower::svg::{
+    Canvas, Layers, Scene, Style, render, render_covers, render_flood, render_path,
+};
 use hightower::{
     Bounds, Improvement, ObstacleSet, Orientation, Point, RouterConfig, Segment, TraceEvent,
     VisibilityConfig, VisibilityGraph, route_with,
@@ -66,7 +68,7 @@ fn diagram_scene() -> (ObstacleSet, Point, Point) {
     (o, p(20, 26), p(80, 74))
 }
 
-/// The running example of the article (figures 6, 8 and 9): eight boxes,
+/// The running example of the article (figures 4, 6, 8 and 9): eight boxes,
 /// a run with several steps for both networks, and a raw path with a U-turn
 /// next to B that only the probing improvement removes.
 fn running_scene() -> (ObstacleSet, Point, Point) {
@@ -137,43 +139,62 @@ fn fig_staircase() {
     write("02_shortest_vs_straight", &two_up(&left, &right, 30.0));
 }
 
-/// Redraw of the paper's Figure 3.1: which segments cover p?
-fn fig_cover_definition() {
-    let mut o = arena(60);
-    let covering = [
-        Segment::horizontal(50, 10, 40), // above, covers
-        Segment::horizontal(12, 25, 55), // below, covers
-        Segment::vertical(8, 20, 45),    // left, covers
-        Segment::vertical(50, 15, 35),   // right, covers
-    ];
-    let not_covering = [
-        Segment::horizontal(40, 35, 55), // above but to the right
-        Segment::vertical(20, 40, 55),   // upper left, does not reach p.y
-        Segment::vertical(42, 2, 20),    // lower right, does not reach p.y
-    ];
-    for s in covering.iter().chain(not_covering.iter()) {
-        o.add_segment(*s);
+/// A point of the running scene that has all four covers, chosen so that the
+/// nearest cover is as far away as possible (ties: closest to the centre).
+fn point_with_four_covers(o: &ObstacleSet) -> Point {
+    let b = o.bounds();
+    let centre = Point::new((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2);
+    let mut best: Option<(i64, i128, Point)> = None;
+    for x in b.min.x + 1..b.max.x {
+        for y in b.min.y + 1..b.max.y {
+            let q = Point::new(x, y);
+            let inside_box = o
+                .rects()
+                .iter()
+                .any(|&(min, max)| min.x < q.x && q.x < max.x && min.y < q.y && q.y < max.y);
+            if !o.is_free_point(q) || inside_box {
+                continue;
+            }
+            let covers = [
+                o.cover_above(q),
+                o.cover_below(q),
+                o.cover_left(q),
+                o.cover_right(q),
+            ];
+            if covers.iter().any(Option::is_none) {
+                continue;
+            }
+            let nearest = covers
+                .iter()
+                .flatten()
+                .map(|c| (c.fixed - q.across(c.orientation)).abs())
+                .min()
+                .unwrap_or(0);
+            let d = q.dist2(centre);
+            if best.is_none_or(|(bn, bd, _)| nearest > bn || (nearest == bn && d < bd)) {
+                best = Some((nearest, d, q));
+            }
+        }
     }
-    let q = p(30, 30);
-    let style = Style::fit(o.bounds(), 360.0);
-    let mut c = Canvas::new(o.bounds(), style.clone());
-    c.frame();
-    for s in &not_covering {
-        c.segment(s, "#c8c8c8", style.obstacle_width, "");
-    }
-    for s in &covering {
-        c.segment(s, style.obstacle_stroke, style.obstacle_width, "");
-        // perpendicular from p to the segment's line, dotted
-        let foot = match s.orientation {
-            Orientation::Horizontal => p(q.x, s.fixed),
-            Orientation::Vertical => p(s.fixed, q.y),
-        };
-        let perp = Segment::between(q, foot).expect("axis-aligned");
-        c.segment(&perp, "#888888", 1.0, r#"stroke-dasharray="3 3""#);
-    }
-    c.dot(q, style.endpoint_fill, style.dot_radius + 1.5);
-    c.text(q, 8.0, -8.0, "p", style.label);
-    write("05_cover_definition", &c.finish());
+    best.expect("a point with four covers").2
+}
+
+fn fig_covers() {
+    let (o, a, b) = running_scene();
+    let q = point_with_four_covers(&o);
+    println!("covers: point {q:?}");
+    let scene = Scene {
+        obstacles: &o,
+        a,
+        b,
+    };
+    let style = Style {
+        labels: false,
+        ..Style::fit(o.bounds(), 480.0)
+    };
+    let left = render_covers(&scene, q, &style, false);
+    let right = render_covers(&scene, q, &style, true);
+    write("04_covers_and_escape_lines", &two_up(&left, &right, 30.0));
 }
 
 /// Process I in three panels, taken from the first Process I step of network
@@ -529,7 +550,7 @@ fn main() {
     fig_visibility_graph();
     fig_hero();
     fig_staircase();
-    fig_cover_definition();
+    fig_covers();
     fig_process_i();
     fig_process_ii();
     fig_animation();

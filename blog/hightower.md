@@ -38,19 +38,19 @@ Dass die rote Linie nicht überall der grauen folgt, liegt nicht an der Rekonstr
 
 Hightower braucht nur zwei Begriffe, und beide sind anschaulich. Für einen Punkt p nennt er das nächste Hindernis, das p in einer der vier Richtungen den Weg versperrt, ein *Cover*. Eine horizontale Strecke *covert* p, wenn das Lot von p auf die Strecke sie trifft, also wenn p in x-Richtung innerhalb der Strecke liegt. Von allen horizontalen Strecken, die p covern, ist die nächste oberhalb die Decke von p und die nächste unterhalb der Boden. Mit den vertikalen Strecken genauso, das gibt die linke und die rechte Wand.
 
-![Ein Punkt p zwischen mehreren Strecken. Vier davon sind schwarz hervorgehoben: die nächste Decke, der nächste Boden, die nächsten Wände links und rechts. Grau gestrichelte Lote zeigen, warum sie p covern.](images/05_cover_definition.svg)
-
-*Die Definition an einem kleinen Beispiel, das Hightowers Figur 3 nachzeichnet: Die vier schwarzen Strecken covern p und sind seine Cover. Die grauen covern p nicht, weil das Lot von p sie verfehlt.*
-
 Die *Escape-Linie* durch p ist dann die längste waagerechte (oder senkrechte) Strecke durch p, die zwischen den Covern Platz hat. Sie ist alles, was p in dieser Richtung „sieht". In der Implementierung endet sie eine Einheit vor dem Cover, damit der Pfad später automatisch Abstand zu den Hindernissen hält. Wenn in einer Richtung kein Cover existiert, endet die Linie am Rand des Spielfelds.
+
+Ab hier benutzen alle Abbildungen dieselbe Szene: acht Kästen in einem Feld von 100 × 100 Einheiten, A am unteren Rand eines Kastens in der Mitte, B rechts unten. Wo ein Ausschnitt mehr zeigt als das ganze Bild, ist er vergrößert, und ein Sonderfall bekommt eine eigene kleine Szene.
+
+![Zweiteilige Abbildung. Links ein Punkt p in der Szene mit acht Kästen, seine vier Cover schwarz, alle anderen Strecken grau. Rechts zusätzlich die beiden blauen Escape-Linien durch p, die kurz vor den Covern enden.](images/04_covers_and_escape_lines.svg)
+
+*Links die vier Cover eines Punktes p in der Beispielszene, rechts seine beiden Escape-Linien.*
 
 Das Schöne an dieser Definition ist, dass man sie ohne Gitter ausrechnen kann. Ich halte die horizontalen Hindernisse in einer `BTreeMap`, deren Schlüssel die y-Koordinate ist, und die vertikalen in einer zweiten mit der x-Koordinate als Schlüssel. Die Decke eines Punktes findet man, indem man in der ersten Map bei der y-Koordinate des Punktes einsteigt (das ist eine Bisektion, die `BTreeMap` erledigt sie in logarithmischer Zeit) und von dort aus Zeile für Zeile nach oben läuft, bis eine Strecke in der Zeile die x-Koordinate des Punktes überdeckt. Boden und Wände genauso, nur in die anderen Richtungen. Die Kosten hängen damit von der Anzahl der Hindernisse ab und von sonst nichts, insbesondere nicht von der Größe des Spielfelds.
 
 ## Escape-Punkte: um Ecken schleichen
 
 Die Escape-Linien eines Punktes sind eine Sackgasse, wenn B nicht zufällig auf einer von ihnen liegt. Der Algorithmus muss also um Ecken kommen, und dafür hat Hightower zwei Prozesse.
-
-Ab hier benutzen die Abbildungen dieselbe Szene: acht Kästen in einem Feld von 100 × 100 Einheiten, A am unteren Rand eines Kastens in der Mitte, B rechts unten. Wo ein Ausschnitt mehr zeigt als das ganze Bild, ist er vergrößert, und ein Sonderfall bekommt eine eigene kleine Szene.
 
 **Prozess I** ist der Normalfall. Nehmen wir an, die Decke über dem aktuellen Punkt Z blockiert den Weg nach oben. Wenn die horizontale Escape-Linie von Z über das Ende dieser Decke hinausreicht, gehen wir seitlich bis eine Einheit hinter das Deckenende. Von dort aus kommt eine neue vertikale Escape-Linie an der Decke vorbei nach oben. Der Punkt hinter dem Deckenende ist ein *Escape-Punkt*, die neue Linie wandert ins Netz. Das Gleiche probiert der Algorithmus mit dem Boden und mit den beiden Wänden, in der Reihenfolge der euklidischen Nähe der Cover-Enden zu Z.
 
