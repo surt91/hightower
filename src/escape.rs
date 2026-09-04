@@ -3,7 +3,7 @@
 
 use crate::geometry::{Orientation, Point, Segment};
 use crate::obstacles::ObstacleSet;
-use crate::router::{Flag, Network};
+use crate::router::{Flag, Network, RouterConfig};
 use crate::trace::{Process, Trace, TraceEvent};
 
 /// Moves `p` one unit toward `z` along the axis in which they differ.
@@ -99,8 +99,9 @@ pub(crate) enum ProcessOutcome {
 ///
 /// The ends of `z`'s escape lines that are bounded by a cover walk back toward
 /// `z` one unit at a time, round-robin. Ends on the bounding box are skipped
-/// as in the paper, unless `boundary_retreat` is set (see
-/// [`RouterConfig::boundary_retreat`](crate::RouterConfig::boundary_retreat)). At every position `r` whose perpendicular escape line is
+/// as in the paper, unless [`RouterConfig::boundary_retreat`] is set. With
+/// [`RouterConfig::recursive_retreat`] the retreat continues along the probe
+/// lines themselves. At every position `r` whose perpendicular escape line is
 /// still unused, that line is constructed and tested against the other
 /// network; then Process I is tried *at `r`*. If it succeeds, `r` and the
 /// Process I point both become escape points (in that order).
@@ -110,7 +111,7 @@ pub(crate) fn process_ii(
     other: &Network,
     z_id: usize,
     z: Point,
-    boundary_retreat: bool,
+    config: &RouterConfig,
     trace: &mut Trace,
 ) -> ProcessOutcome {
     let v = obstacles.escape_line(z, Orientation::Vertical);
@@ -121,7 +122,7 @@ pub(crate) fn process_ii(
     // and therefore no retreat position unless `boundary_retreat` is set; we
     // mark such ends as exhausted (== z).
     let end = |point: Point, on_boundary: bool| {
-        if on_boundary && !boundary_retreat {
+        if on_boundary && !config.boundary_retreat {
             z
         } else {
             point
@@ -179,6 +180,23 @@ pub(crate) fn process_ii(
                         process: Process::I,
                     });
                     return ProcessOutcome::Escaped;
+                }
+                // Recursive reading of "try to find a Process I escape point
+                // ... as outlined in the Escape Algorithm": retreat along the
+                // new probe line as well. Terminates because every level
+                // constructs at least one new line.
+                if config.recursive_retreat {
+                    match process_ii(obstacles, net, other, r_id, r[i], config, trace) {
+                        ProcessOutcome::Failed => {}
+                        outcome => {
+                            trace.push(TraceEvent::EscapePoint {
+                                net: net.id,
+                                point: r[i],
+                                process: Process::II,
+                            });
+                            return outcome;
+                        }
+                    }
                 }
             }
             r[i] = toward(r[i], z);

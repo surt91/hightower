@@ -133,6 +133,18 @@ pub struct RouterConfig {
     /// paths. Enabling this finds more paths at the price of many probe
     /// lines in open scenes (up to one per unit of the bounding box).
     pub boundary_retreat: bool,
+    /// Let Escape Process II recurse: when neither the retreat position nor
+    /// Process I at it leads anywhere, retreat along the freshly constructed
+    /// probe line as well.
+    ///
+    /// The paper's wording ("try to find a Process I escape point on either
+    /// of the two escape lines as outlined in the Escape Algorithm") admits
+    /// this reading, and it is what lets the router thread long corridors
+    /// such as the Hampton Court maze, which the flat reading cannot.
+    /// Termination is unaffected (every level constructs a new line); the
+    /// number of lines grows only slightly (about 7 % on random room scenes).
+    /// Default: `true`.
+    pub recursive_retreat: bool,
 }
 
 impl Default for RouterConfig {
@@ -141,6 +153,7 @@ impl Default for RouterConfig {
             max_steps: 10_000,
             improve: Improvement::ExtensionOnly,
             boundary_retreat: false,
+            recursive_retreat: true,
         }
     }
 }
@@ -392,15 +405,7 @@ pub(crate) fn escape_step(
         });
         return StepResult::Continue;
     }
-    match process_ii(
-        obstacles,
-        net,
-        other,
-        z_id,
-        z,
-        config.boundary_retreat,
-        trace,
-    ) {
+    match process_ii(obstacles, net, other, z_id, z, config, trace) {
         ProcessOutcome::Escaped => StepResult::Continue,
         ProcessOutcome::Intersection {
             point,

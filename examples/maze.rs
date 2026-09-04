@@ -1,110 +1,163 @@
-//! A Hampton-Court-style hedge maze, solved by the line router. Homage to the
-//! paper's page-19 plot ("Solution to Hampton Court Maze, total time .0005").
-//! Writes `out/maze.svg` and `out/maze_trace.svg`.
+//! Hightower's Hampton Court maze, solved by the line router.
+//!
+//! The walls are traced from the plot on page 19 of the 1969 paper
+//! (`scripts/trace_maze.py`, data in `examples/data/hampton_court.txt`), so
+//! this is the maze Hightower's FORTRAN program solved, in a 392 x 372 unit
+//! box. The plot's own path is drawn underneath ours for comparison, and the
+//! run time is reported the way the plot did it: in hours.
+//! Writes `out/maze.svg` (paper style) and `out/maze_trace.svg` (with both networks).
 
 use std::fs;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use hightower::svg::{Layers, Scene, Style, render, render_path};
-use hightower::{Bounds, ObstacleSet, Point, RouterConfig, Segment, route_with};
+use hightower::svg::{Canvas, Layers, Style};
+use hightower::{
+    Bounds, ObstacleSet, Outcome, Point, RouterConfig, Segment, route_visibility, route_with,
+};
 
-fn p(x: i64, y: i64) -> Point {
-    Point::new(x, y)
+const DATA: &str = include_str!("data/hampton_court.txt");
+
+struct Maze {
+    obstacles: ObstacleSet,
+    paper_path: Vec<Segment>,
+    a: Point,
+    b: Point,
 }
 
-/// Walls of a small maze in the spirit of Hampton Court: concentric hedges
-/// with offset gaps and a few dead-end spurs. Coordinates in a 120 x 90 box.
-pub fn hampton_court() -> ObstacleSet {
-    let mut m = ObstacleSet::new(Bounds::new(p(0, 0), p(120, 90)));
-    let mut h = |y, x1, x2| m.add_segment(Segment::horizontal(y, x1, x2));
-    // outer hedge with the entrance at the bottom (x 56..64)
-    h(2, 2, 56);
-    h(2, 64, 118);
-    h(88, 2, 118);
-    let mut v = |x, y1, y2| m.add_segment(Segment::vertical(x, y1, y2));
-    v(2, 2, 88);
-    v(118, 2, 88);
-    // second ring, gap at the right side (y 40..48)
-    let mut h = |y, x1, x2| m.add_segment(Segment::horizontal(y, x1, x2));
-    h(12, 12, 108);
-    h(78, 12, 108);
-    let mut v = |x, y1, y2| m.add_segment(Segment::vertical(x, y1, y2));
-    v(12, 12, 78);
-    v(108, 12, 40);
-    v(108, 48, 78);
-    // third ring, gap at the top left (x 22..30)
-    let mut h = |y, x1, x2| m.add_segment(Segment::horizontal(y, x1, x2));
-    h(22, 22, 98);
-    h(68, 30, 98);
-    let mut v = |x, y1, y2| m.add_segment(Segment::vertical(x, y1, y2));
-    v(22, 22, 68);
-    v(98, 22, 68);
-    // fourth ring, gap at the bottom right (x 76..84)
-    let mut h = |y, x1, x2| m.add_segment(Segment::horizontal(y, x1, x2));
-    h(32, 32, 76);
-    h(32, 84, 88);
-    h(58, 32, 88);
-    let mut v = |x, y1, y2| m.add_segment(Segment::vertical(x, y1, y2));
-    v(32, 32, 58);
-    v(88, 32, 58);
-    // spurs and baffles that turn rings into corridors with dead ends
-    let mut h = |y, x1, x2| m.add_segment(Segment::horizontal(y, x1, x2));
-    h(7, 40, 80); // baffle behind the entrance
-    h(45, 32, 60); // divider inside the centre
-    h(17, 60, 108); // dead end in ring 2
-    h(73, 12, 50); // dead end in ring 2 top
-    h(27, 22, 50); // dead end in ring 3
-    let mut v = |x, y1, y2| m.add_segment(Segment::vertical(x, y1, y2));
-    v(7, 40, 88); // dead end ring 1 left
-    v(113, 2, 60); // dead end ring 1 right
-    v(60, 12, 17); // stub
-    v(50, 22, 27); // stub
-    v(70, 32, 45); // stub inside the centre
-    v(17, 40, 78); // dead end ring 2 left
-    v(93, 22, 50); // dead end ring 3 right
-    m
+fn load() -> Maze {
+    let mut grid = (0, 0);
+    let mut walls = Vec::new();
+    let mut paper_path = Vec::new();
+    let (mut a, mut b) = (None, None);
+    for line in DATA.lines() {
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let num = |i: usize| f[i].parse::<i64>().expect("integer");
+        match f.first().copied() {
+            Some("#") if f.get(1) == Some(&"grid") => grid = (num(2), num(3)),
+            Some("h") => walls.push(Segment::horizontal(num(1), num(2), num(3))),
+            Some("v") => walls.push(Segment::vertical(num(1), num(2), num(3))),
+            Some("ph") => paper_path.push(Segment::horizontal(num(1), num(2), num(3))),
+            Some("pv") => paper_path.push(Segment::vertical(num(1), num(2), num(3))),
+            Some("A") => a = Some(Point::new(num(1), num(2))),
+            Some("B") => b = Some(Point::new(num(1), num(2))),
+            _ => {}
+        }
+    }
+    let mut obstacles = ObstacleSet::new(Bounds::new(Point::new(0, 0), Point::new(grid.0, grid.1)));
+    for w in walls {
+        obstacles.add_segment(w);
+    }
+    Maze {
+        obstacles,
+        paper_path,
+        a: a.expect("A in data file"),
+        b: b.expect("B in data file"),
+    }
+}
+
+/// The plot on page 19 says "TOTAL TIME .0005" without a unit; hours is the
+/// most plausible reading for 1969 batch accounting. We return the favour.
+fn hours(d: Duration) -> String {
+    let h = d.as_secs_f64() / 3600.0;
+    // the plotter printed no leading zero and no exponent
+    let s = format!("{h:.12}");
+    s.trim_start_matches('0').to_string()
 }
 
 fn main() {
-    let maze = hampton_court();
-    let a = p(60, 0); // outside the entrance
-    let b = p(50, 40); // goal in the centre
-    let start = Instant::now();
-    let result = route_with(&maze, a, b, &RouterConfig::default());
-    let elapsed = start.elapsed();
+    let maze = load();
+    let (a, b) = (maze.a, maze.b);
+    let config = RouterConfig::default();
+
+    // time it: median over many runs, the maze is small
+    let runs = 2000;
+    let mut times: Vec<Duration> = (0..runs)
+        .map(|_| {
+            let t = Instant::now();
+            std::hint::black_box(route_with(&maze.obstacles, a, b, &config));
+            t.elapsed()
+        })
+        .collect();
+    times.sort();
+    let median = times[runs / 2];
+    let result = route_with(&maze.obstacles, a, b, &config);
+
+    println!("SOLUTION TO HAMPTON COURT MAZE");
+    println!("{} walls, A = {a:?}, B = {b:?}", maze.obstacles.len());
+    match result.outcome {
+        Outcome::Found => println!("FOUND PATH FROM A TO B"),
+        other => println!("NO PATH ({other:?})"),
+    }
     println!(
-        "outcome={:?} steps={} lines={} time={elapsed:?}",
-        result.outcome,
+        "TOTAL TIME {}  (that is {median:?}; {} steps, {} lines)",
+        hours(median),
         result.steps,
         result.trace.line_count()
     );
-    fs::create_dir_all("out").expect("create out/");
-    let scene = Scene {
-        obstacles: &maze,
-        a,
-        b,
-    };
-    let style = Style {
-        obstacle_width: 4.0,
-        path_width: 4.0,
-        ..Style::fit(maze.bounds(), 720.0)
-    };
-    fs::write(
-        "out/maze_trace.svg",
-        render(
-            &scene,
-            &result.trace,
-            result.trace.len(),
-            &style,
-            Layers::default(),
-        ),
-    )
-    .expect("write svg");
-    match &result.path {
-        Some(path) => {
-            println!("path with {} corners: {path:?}", path.len());
-            fs::write("out/maze.svg", render_path(&scene, path, &style)).expect("write svg");
+
+    // Hightower's router is not complete; if it gives up here, say so and
+    // show the visibility-graph route instead.
+    let (path, label) = match &result.path {
+        Some(p) => (p.clone(), format!("TOTAL TIME {}", hours(median))),
+        None => {
+            let vis = route_visibility(&maze.obstacles, a, b).expect("the maze has a solution");
+            println!("(falling back to the visibility graph for the drawing)");
+            (
+                vis,
+                "NO PATH FOUND BY LINE SEARCH; VISIBILITY GRAPH SHOWN".to_string(),
+            )
         }
-        None => println!("no path found"),
-    }
+    };
+
+    fs::create_dir_all("out").expect("create out/");
+    let bounds = maze.obstacles.bounds();
+    let style = Style {
+        margin: 46.0,
+        obstacle_width: 2.0,
+        path_width: 7.0,
+        font_size: 15.0,
+        labels: true,
+        ..Style::fit(bounds, 720.0)
+    };
+    let paper = |with_trace: bool| {
+        let mut c = Canvas::new(bounds, style.clone());
+        c.frame();
+        for s in &maze.paper_path {
+            c.segment(s, "#cfcfcf", style.path_width * 1.6, "");
+        }
+        c.obstacles(&maze.obstacles);
+        if with_trace {
+            c.trace(
+                &result.trace,
+                result.trace.len(),
+                Layers {
+                    final_path: false,
+                    ..Layers::default()
+                },
+            );
+        }
+        c.polyline(&path, style.path, style.path_width, "");
+        c.endpoints(a, b);
+        let mono = |c: &mut Canvas, y: f64, text: &str| {
+            c.raw(&format!(
+                r##"<text x="50%" y="{y:.0}" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="{}" fill="#111">{}</text>"##,
+                style.font_size, text
+            ));
+        };
+        mono(&mut c, 24.0, "SOLUTION TO HAMPTON COURT MAZE");
+        mono(&mut c, 46.0, "FOUND PATH FROM A TO B");
+        mono(&mut c, 64.0, &label);
+        mono(
+            &mut c,
+            84.0,
+            "(gray: the path plotted in 1969, red: this implementation)",
+        );
+        c.finish()
+    };
+    fs::write("out/maze.svg", paper(false)).expect("write svg");
+    fs::write("out/maze_trace.svg", paper(true)).expect("write svg");
+    println!(
+        "path with {} corners; wrote out/maze.svg and out/maze_trace.svg",
+        path.len()
+    );
 }
