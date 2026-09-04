@@ -86,13 +86,13 @@
 <line x1="948.2" y1="417.9" x2="948.2" y2="136.6" stroke="#111111" stroke-width="2" stroke-linecap="round" />
 <line x1="968.3" y1="795.5" x2="968.3" y2="606.7" stroke="#111111" stroke-width="2" stroke-linecap="round" />
 <line x1="1000.4" y1="952.2" x2="1000.4" y2="108.5" stroke="#111111" stroke-width="2" stroke-linecap="round" />
-<polyline points="554.5,944.2 554.5,892.0 132.6,892.0 132.6,522.3 160.7,522.3 160.7,429.9 132.6,429.9 132.6,132.6 329.5,132.6 329.5,225.0 188.8,225.0 188.8,413.8 196.9,413.8 196.9,695.1 188.8,695.1 188.8,799.6 462.1,799.6 462.1,610.7 397.8,610.7 397.8,333.5 478.1,333.5 478.1,237.1 470.1,237.1 470.1,229.0 574.6,229.0 574.6,237.1 566.5,237.1 566.5,333.5 610.7,333.5 610.7,610.7 586.6,610.7 586.6,703.1 900.0,703.1 900.0,602.7 972.3,602.7 972.3,799.6 546.4,799.6 546.4,490.2 474.1,490.2" fill="none" stroke="#d62828" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="554.5,944.2 132.6,944.2 132.6,518.3 160.7,518.3 160.7,421.9 132.6,421.9 132.6,132.6 329.5,132.6 329.5,229.0 188.8,229.0 188.8,413.8 196.9,413.8 196.9,695.1 188.8,695.1 188.8,799.6 462.1,799.6 462.1,610.7 397.8,610.7 397.8,333.5 478.1,333.5 478.1,237.1 470.1,237.1 470.1,229.0 546.4,229.0 546.4,132.6 662.9,132.6 662.9,325.4 887.9,325.4 887.9,333.5 896.0,333.5 896.0,229.0 695.1,229.0 695.1,132.6 952.2,132.6 952.2,421.9 944.2,421.9 944.2,518.3 972.3,518.3 972.3,799.6 550.4,799.6 550.4,490.2 474.1,490.2" fill="none" stroke="#d62828" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
 <circle cx="554.5" cy="944.2" r="4" fill="#111111"/>
 <circle cx="474.1" cy="490.2" r="4" fill="#111111"/>
 <text x="538.5" y="937.2" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#111111">A</text>
 <text x="482.1" y="483.2" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#111111">B</text>
 <text x="50%" y="24" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">SOLUTION TO HAMPTON COURT MAZE</text>
 <text x="50%" y="46" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">FOUND PATH FROM A TO B</text>
-<text x="50%" y="64" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">TOTAL TIME .000000457934</text>
+<text x="50%" y="64" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">TOTAL TIME .000000221814</text>
 <text x="50%" y="84" text-anchor="middle" font-family="Courier New, Courier, monospace" font-size="15" fill="#111">(gray: the path plotted in 1969, red: this implementation)</text>
 </svg>

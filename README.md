@@ -104,7 +104,7 @@ python3 scripts/plot_bench.py                 # -> out/blog/12_benchmark.svg
   covers (that is where the clearance comes from).
 * `router.rs` – the two networks, the main loop and one escape step.
 * `escape.rs` – Escape Process I (slip around the end of a cover) and
-  Process II (retreat along the escape line and branch off, recursively).
+  Process II (retreat along the escape line with trial lines, Figure 6).
 * `refine.rs` – path reconstruction from the escape-point trees, collinear
   cleanup, the paper's second improvement (segment extension, optional
   perpendicular probing) and a validity checker.
@@ -113,17 +113,19 @@ python3 scripts/plot_bench.py                 # -> out/blog/12_benchmark.svg
 * `grid.rs` – a naive Lee-style BFS used as oracle in tests and as the
   baseline in the benchmark.
 
-Three deliberate deviations from the plan in `references/plan.md`: escape
-points carry parent pointers (a tree) instead of lines, which makes the
-paper's "first refinement" unnecessary; Process II only retreats from
-escape-line ends that were stopped by a cover, not from ends on the bounding
-box, as in the paper (the more thorough variant is
-`RouterConfig::boundary_retreat`); and Process II retreats recursively along
-the probe lines it constructs (`RouterConfig::recursive_retreat`, default
-on). The last one follows from the paper's wording and is what makes the
-router solve Hightower's own Hampton Court maze, which the flat reading
-cannot. On 16782 random room-and-door scenes the default misses about 2 %
-of the existing paths, the flat reading 2.3 %, and `boundary_retreat` 0.1 %.
+Two deliberate deviations from the plan in `references/plan.md`, both in
+favour of the paper: escape points carry parent pointers (a tree) instead of
+lines, which makes the paper's "first refinement" unnecessary; and Process II
+follows Figure 6 of the paper: the trial line through a retreat position is
+tested for intersections and searched with Process I, but only entered in the
+network when the position becomes an escape point. Trial lines that led
+nowhere are forgotten and do not count as "previously used" (the text says
+"enter the line in L" only for the object point's line). Keeping them makes
+the router miss the paper's own Hampton Court maze. Retreat positions exist
+only where an escape line is stopped by a cover, not at the bounding box
+(`RouterConfig::boundary_retreat` is the more thorough non-paper variant).
+On 16782 random room-and-door scenes the router misses about 1.8 % of the
+existing paths, `boundary_retreat` 0.2 %.
 
 ## The Hampton Court maze
 
@@ -135,12 +137,12 @@ reports the time the way the plot did, in hours:
 ```
 SOLUTION TO HAMPTON COURT MAZE
 FOUND PATH FROM A TO B
-TOTAL TIME .0000005
+TOTAL TIME .0000002
 ```
 
-The raw path of the recursive retreat zigzags from wall to wall in the
-corridors (5095 units here); the default `Improvement::Full` removes that
-and ends up at the shortest length (1357 units).
+The raw path zigzags from wall to wall in the corridors because Process II
+retreats from the far end of each line; the paper's second improvement
+(both parts, `Improvement::Full`, the default) removes that.
 
 ![the traced maze with both paths](blog/images/03_maze.svg)
 
