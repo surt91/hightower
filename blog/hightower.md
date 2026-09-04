@@ -42,9 +42,9 @@ Die *Escape-Linie* durch p ist dann die längste waagerechte (oder senkrechte) S
 
 Ab hier benutzen alle Abbildungen dieselbe Szene: acht Kästen in einem Feld von 100 × 100 Einheiten, A am unteren Rand eines Kastens in der Mitte, B rechts unten. Wo ein Ausschnitt mehr zeigt als das ganze Bild, ist er vergrößert, und ein Sonderfall bekommt eine eigene kleine Szene.
 
-![Zweiteilige Abbildung. Links ein Punkt p in der Szene mit acht Kästen, seine vier Cover schwarz, alle anderen Strecken grau. Rechts zusätzlich die beiden blauen Escape-Linien durch p, die kurz vor den Covern enden.](images/04_covers_and_escape_lines.svg)
+![Zweiteilige Abbildung. Links der Punkt A in der Szene mit acht Kästen, seine drei Cover schwarz, alle anderen Strecken grau. Rechts zusätzlich die beiden blauen Escape-Linien durch A: die waagerechte läuft nach links bis zum Rand, die senkrechte endet direkt über A.](images/04_covers_and_escape_lines.svg)
 
-*Links die vier Cover eines Punktes p in der Beispielszene, rechts seine beiden Escape-Linien.*
+*Links die Cover von A in der Beispielszene, nach links gibt es keines. Rechts die beiden Escape-Linien von A: waagerecht bis zum Rand, senkrecht nur nach unten, weil der Kasten direkt über A beginnt.*
 
 Das Schöne an dieser Definition ist, dass man sie ohne Gitter ausrechnen kann. Ich halte die horizontalen Hindernisse in einer `BTreeMap`, deren Schlüssel die y-Koordinate ist, und die vertikalen in einer zweiten mit der x-Koordinate als Schlüssel. Die Decke eines Punktes findet man, indem man in der ersten Map bei der y-Koordinate des Punktes einsteigt (das ist eine Bisektion, die `BTreeMap` erledigt sie in logarithmischer Zeit) und von dort aus Zeile für Zeile nach oben läuft, bis eine Strecke in der Zeile die x-Koordinate des Punktes überdeckt. Boden und Wände genauso, nur in die anderen Richtungen. Die Kosten hängen damit von der Anzahl der Hindernisse ab und von sonst nichts, insbesondere nicht von der Größe des Spielfelds.
 
@@ -162,4 +162,4 @@ Für den Editor ergibt sich daraus eine einfache Arbeitsteilung: Hightower für 
 
 Hightower beschreibt im Paper vier Betriebsmodi für ganze Netzlisten, von „alle Verbindungen ohne Kreuzungen" bis zur Simulation einer zweiseitigen Platine. Davon habe ich nur den Baustein umgesetzt, dass fertige Pfade zu Hindernissen werden. Die Reihenfolge der Netze (Hightower empfiehlt, mit den kurzen anzufangen) bleibt dem Aufrufer überlassen. Beim Sichtbarkeitsgraphen fehlt die Beschleunigung aus dem Nachfolgepaper *Seeing Around Corners* (Diagrams 2014), das topologisch gleichwertige Routen zusammenfasst, und das inkrementelle Neuberechnen beim Verschieben von Kästen, das libavoid kann.
 
-Der Code liegt auf GitHub unter [REPO-URL]. Die Beispiele im Ordner `examples/` erzeugen alle Abbildungen dieses Artikels, das Labyrinth eingeschlossen, und der Benchmark schreibt eine CSV, aus der ein kurzes Python-Skript das Diagramm oben zeichnet.
+Der Code liegt auf GitHub unter [REPO-URL]. Unter [PAGES-URL] läuft die Beispielszene im Browser: Kästen und Endpunkte lassen sich verschieben, und der Pfad folgt sofort. Die Beispiele im Ordner `examples/` erzeugen alle Abbildungen dieses Artikels, das Labyrinth eingeschlossen, und der Benchmark schreibt eine CSV, aus der ein kurzes Python-Skript das Diagramm oben zeichnet.

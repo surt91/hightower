@@ -383,6 +383,9 @@ pub fn render_path(scene: &Scene, path: &[Point], style: &Style) -> String {
 }
 
 /// Renders one point's four covers and two escape lines (blog figure helper).
+/// Highlights the covers of `p` (and optionally its escape lines). `p` is
+/// usually one of the endpoints, which are drawn with their labels; any other
+/// point is labelled `p`.
 pub fn render_covers(scene: &Scene, p: Point, style: &Style, show_escape_lines: bool) -> String {
     let obstacles = scene.obstacles;
     let mut c = Canvas::new(obstacles.bounds(), style.clone());
@@ -406,8 +409,11 @@ pub fn render_covers(scene: &Scene, p: Point, style: &Style, show_escape_lines: 
         c.segment(&h, style.net_a, style.line_width * 1.6, "");
         c.segment(&v, style.net_a, style.line_width * 1.6, "");
     }
-    c.dot(p, style.endpoint_fill, style.dot_radius + 1.5);
-    c.text(p, 8.0, 16.0, "p", style.label);
+    c.endpoints(scene.a, scene.b);
+    if p != scene.a && p != scene.b {
+        c.dot(p, style.endpoint_fill, style.dot_radius + 1.5);
+        c.text(p, 8.0, 16.0, "p", style.label);
+    }
     c.finish()
 }
 

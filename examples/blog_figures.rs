@@ -139,61 +139,23 @@ fn fig_staircase() {
     write("02_shortest_vs_straight", &two_up(&left, &right, 30.0));
 }
 
-/// A point of the running scene that has all four covers, chosen so that the
-/// nearest cover is as far away as possible (ties: closest to the centre).
-fn point_with_four_covers(o: &ObstacleSet) -> Point {
-    let b = o.bounds();
-    let centre = Point::new((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2);
-    let mut best: Option<(i64, i128, Point)> = None;
-    for x in b.min.x + 1..b.max.x {
-        for y in b.min.y + 1..b.max.y {
-            let q = Point::new(x, y);
-            let inside_box = o
-                .rects()
-                .iter()
-                .any(|&(min, max)| min.x < q.x && q.x < max.x && min.y < q.y && q.y < max.y);
-            if !o.is_free_point(q) || inside_box {
-                continue;
-            }
-            let covers = [
-                o.cover_above(q),
-                o.cover_below(q),
-                o.cover_left(q),
-                o.cover_right(q),
-            ];
-            if covers.iter().any(Option::is_none) {
-                continue;
-            }
-            let nearest = covers
-                .iter()
-                .flatten()
-                .map(|c| (c.fixed - q.across(c.orientation)).abs())
-                .min()
-                .unwrap_or(0);
-            let d = q.dist2(centre);
-            if best.is_none_or(|(bn, bd, _)| nearest > bn || (nearest == bn && d < bd)) {
-                best = Some((nearest, d, q));
-            }
-        }
-    }
-    best.expect("a point with four covers").2
-}
-
 fn fig_covers() {
     let (o, a, b) = running_scene();
-    let q = point_with_four_covers(&o);
-    println!("covers: point {q:?}");
+    println!(
+        "covers of A: above {:?}, below {:?}, left {:?}, right {:?}",
+        o.cover_above(a),
+        o.cover_below(a),
+        o.cover_left(a),
+        o.cover_right(a)
+    );
     let scene = Scene {
         obstacles: &o,
         a,
         b,
     };
-    let style = Style {
-        labels: false,
-        ..Style::fit(o.bounds(), 480.0)
-    };
-    let left = render_covers(&scene, q, &style, false);
-    let right = render_covers(&scene, q, &style, true);
+    let style = Style::fit(o.bounds(), 480.0);
+    let left = render_covers(&scene, a, &style, false);
+    let right = render_covers(&scene, a, &style, true);
     write("04_covers_and_escape_lines", &two_up(&left, &right, 30.0));
 }
 
