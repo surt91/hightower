@@ -54,7 +54,7 @@ def style(ax, title, xlabel):
     ax.set_ylim(1e2, 3e8)
 
 
-def series(ax, data, xkey):
+def series(ax, data, xkey, at=0):
     xs = [int(r[xkey]) for r in data]
     h = [int(r["hightower_ns"]) for r in data]
     g = [int(r["grid_ns"]) for r in data]
@@ -63,11 +63,11 @@ def series(ax, data, xkey):
     ax.plot(xs, g, color=RED, **mark)
     ax.plot(xs, v, color=GREEN, **mark)
     ax.plot(xs, h, color=BLUE, **mark)
-    ax.annotate("Gitter-BFS (Lee)", (xs[0], g[0]), xytext=(0, 12), textcoords="offset points",
+    ax.annotate("Gitter-BFS (Lee)", (xs[at], g[at]), xytext=(0, 12), textcoords="offset points",
                 ha="left", color=INK, fontsize=11)
-    ax.annotate("Sichtbarkeitsgraph + A*", (xs[0], v[0]), xytext=(0, 12), textcoords="offset points",
+    ax.annotate("Sichtbarkeitsgraph + A*", (xs[at], v[at]), xytext=(0, 12), textcoords="offset points",
                 ha="left", color=INK, fontsize=11)
-    ax.annotate("Hightower", (xs[0], h[0]), xytext=(0, -20), textcoords="offset points",
+    ax.annotate("Hightower", (xs[at], h[at]), xytext=(0, -20), textcoords="offset points",
                 ha="left", color=INK, fontsize=11)
 
 
@@ -77,12 +77,12 @@ axes[0].set_xticks([int(r["side"]) for r in area])
 axes[0].set_xticklabels([r["side"] for r in area])
 series(axes[0], area, "side")
 
-style(axes[1], "Fläche 256 × 256, wachsende Anzahl Hindernisse", "Anzahl Rechtecke")
+style(axes[1], "Fläche 256 × 256, mehr Rechtecke", "Anzahl Rechtecke")
 axes[1].set_xscale("symlog", base=2, linthresh=5)
 axes[1].set_xticks([int(r["obstacles"]) for r in clutter])
 axes[1].set_xticklabels([r["obstacles"] for r in clutter])
 axes[1].set_ylabel("")
-series(axes[1], clutter, "obstacles")
+series(axes[1], clutter, "obstacles", at=2)
 
 fig.tight_layout(w_pad=3)
 dst.parent.mkdir(parents=True, exist_ok=True)
