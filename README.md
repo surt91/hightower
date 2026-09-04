@@ -135,8 +135,12 @@ reports the time the way the plot did, in hours:
 ```
 SOLUTION TO HAMPTON COURT MAZE
 FOUND PATH FROM A TO B
-TOTAL TIME .000000163
+TOTAL TIME .0000005
 ```
+
+The raw path of the recursive retreat zigzags from wall to wall in the
+corridors (5095 units here); the default `Improvement::Full` removes that
+and ends up at the shortest length (1357 units).
 
 ![the traced maze with both paths](blog/images/03_maze.svg)
 

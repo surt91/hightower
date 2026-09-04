@@ -2,8 +2,8 @@
 //!
 //! The walls are traced from the plot on page 19 of the 1969 paper
 //! (`scripts/trace_maze.py`, data in `examples/data/hampton_court.txt`), so
-//! this is the maze Hightower's FORTRAN program solved, in a 392 x 372 unit
-//! box. The plot's own path is drawn underneath ours for comparison, and the
+//! this is the maze Hightower's FORTRAN program solved, in a 224 x 212 unit
+//! box (seven scan pixels per unit, corridors about three units wide). The plot's own path is drawn underneath ours for comparison, and the
 //! run time is reported the way the plot did it: in hours.
 //! Writes `out/maze.svg` (paper style) and `out/maze_trace.svg` (with both networks).
 
@@ -111,19 +111,22 @@ fn main() {
 
     fs::create_dir_all("out").expect("create out/");
     let bounds = maze.obstacles.bounds();
+    // 224 units on 900 px: one unit of clearance is 4 px, the path 3 px wide,
+    // so the walls stay visible next to it.
     let style = Style {
-        margin: 46.0,
+        margin: 26.0,
         obstacle_width: 2.0,
-        path_width: 7.0,
+        path_width: 3.0,
+        dot_radius: 2.5,
         font_size: 15.0,
         labels: true,
-        ..Style::fit(bounds, 720.0)
+        ..Style::fit(bounds, 900.0)
     };
     let paper = |with_trace: bool| {
         let mut c = Canvas::new(bounds, style.clone());
         c.frame();
         for s in &maze.paper_path {
-            c.segment(s, "#cfcfcf", style.path_width * 1.6, "");
+            c.segment(s, "#d9d9d9", style.path_width * 2.5, "");
         }
         c.obstacles(&maze.obstacles);
         if with_trace {

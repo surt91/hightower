@@ -1,7 +1,7 @@
 //! Path reconstruction from the two escape-point trees, collinear cleanup,
 //! the paper's "second improvement" and a validity checker.
 
-use crate::geometry::{Orientation, Point, Segment};
+use crate::geometry::{Coord, Orientation, Point, Segment};
 use crate::obstacles::ObstacleSet;
 use crate::router::Network;
 
@@ -76,46 +76,71 @@ pub fn improve_extension(obstacles: &ObstacleSet, path: &mut Vec<Point>) -> bool
 /// Improvement B (paper Fig. 8 → 9): slide a probe point along every segment
 /// (from its far end back to its start) and shoot a perpendicular escape line
 /// from it; if that line crosses a later parallel segment, splice the shortcut
-/// in. Removes staircases. Returns whether the path changed.
+/// in. Removes staircases and the wall-to-wall zigzags that Process II leaves
+/// behind in corridors. Returns whether the path changed.
+///
+/// A probe can only hit a later *parallel* segment whose span overlaps the
+/// probe position, so only those positions are visited (far end first, as in
+/// the paper). After a splice the scan resumes at the spliced segment; a pass
+/// that changed anything is followed by another full pass, so the result is
+/// the same fixed point the exhaustive scan reaches.
 pub fn improve_probe(obstacles: &ObstacleSet, path: &mut Vec<Point>) -> bool {
     let mut changed = false;
-    // Every splice strictly shortens the path, so this terminates; the cap
-    // only guards against pathological inputs.
-    let mut budget = 100_000usize;
-    'restart: loop {
-        if path.len() < 4 {
+    loop {
+        let changed_this_pass = probe_pass(obstacles, path);
+        changed |= changed_this_pass;
+        if !changed_this_pass {
             return changed;
         }
-        for i in 0..path.len() - 1 {
-            let seg = segment_at(path, i);
-            let o = seg.orientation;
-            let start = path[i].along(o);
-            let end = path[i + 1].along(o);
-            let step = (start - end).signum();
-            let mut q_along = end + step; // one unit before the far end
-            while q_along != start + step {
-                budget = budget.saturating_sub(1);
-                if budget == 0 {
-                    return changed;
+    }
+}
+
+/// One pass of [`improve_probe`] over the whole path.
+fn probe_pass(obstacles: &ObstacleSet, path: &mut Vec<Point>) -> bool {
+    let mut changed = false;
+    let mut i = 0;
+    'segments: while path.len() >= 4 && i + 1 < path.len() {
+        let seg = segment_at(path, i);
+        let o = seg.orientation;
+        let end = path[i + 1].along(o);
+
+        // positions on this segment (excluding the far end) that some later
+        // parallel segment could be hit from, ordered from the far end inward
+        let mut candidates: Vec<Coord> = Vec::new();
+        let mut j = i + 2;
+        while j + 1 < path.len() {
+            let later = segment_at(path, j);
+            let lo = seg.from.max(later.from);
+            let hi = seg.to.min(later.to);
+            for q_along in lo..=hi {
+                if q_along != end {
+                    candidates.push(q_along);
                 }
-                let q = Point::from_along_across(o, q_along, seg.fixed);
-                let probe = obstacles.escape_line(q, o.perpendicular());
-                let mut j = i + 2;
-                while j + 1 < path.len() {
-                    let later = segment_at(path, j);
-                    if let Some(x) = probe.crossing(&later) {
-                        path.splice(i + 1..=j, [q, x]);
-                        cleanup(path);
-                        changed = true;
-                        continue 'restart;
-                    }
-                    j += 2;
+            }
+            j += 2;
+        }
+        candidates.sort_unstable_by_key(|&q| (q - end).abs());
+        candidates.dedup();
+
+        for q_along in candidates {
+            let q = Point::from_along_across(o, q_along, seg.fixed);
+            let probe = obstacles.escape_line(q, o.perpendicular());
+            let mut j = i + 2;
+            while j + 1 < path.len() {
+                let later = segment_at(path, j);
+                if let Some(x) = probe.crossing(&later) {
+                    path.splice(i + 1..=j, [q, x]);
+                    cleanup(path);
+                    changed = true;
+                    i = i.saturating_sub(1);
+                    continue 'segments;
                 }
-                q_along += step;
+                j += 2;
             }
         }
-        return changed;
+        i += 1;
     }
+    changed
 }
 
 /// Checks that `path` is a valid rectilinear route from `a` to `b`:
@@ -170,6 +195,102 @@ pub fn validate_path(
 mod tests {
     use super::*;
     use crate::geometry::Bounds;
+
+    /// The paper's exhaustive probing (every unit position, restart from the
+    /// first segment after each splice), kept as the reference the optimised
+    /// [`improve_probe`] must agree with.
+    fn improve_probe_exhaustive(obstacles: &ObstacleSet, path: &mut Vec<Point>) -> bool {
+        let mut changed = false;
+        'restart: loop {
+            if path.len() < 4 {
+                return changed;
+            }
+            for i in 0..path.len() - 1 {
+                let seg = segment_at(path, i);
+                let o = seg.orientation;
+                let start = path[i].along(o);
+                let end = path[i + 1].along(o);
+                let step = (start - end).signum();
+                let mut q_along = end + step;
+                while q_along != start + step {
+                    let q = Point::from_along_across(o, q_along, seg.fixed);
+                    let probe = obstacles.escape_line(q, o.perpendicular());
+                    let mut j = i + 2;
+                    while j + 1 < path.len() {
+                        let later = segment_at(path, j);
+                        if let Some(x) = probe.crossing(&later) {
+                            path.splice(i + 1..=j, [q, x]);
+                            cleanup(path);
+                            changed = true;
+                            continue 'restart;
+                        }
+                        j += 2;
+                    }
+                    q_along += step;
+                }
+            }
+            return changed;
+        }
+    }
+
+    #[test]
+    fn optimised_probe_matches_the_exhaustive_scan() {
+        use crate::router::{Improvement, RouterConfig, route_with};
+        // deterministic xorshift scenes with rectangles and loose segments
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = move || {
+            state ^= state >> 12;
+            state ^= state << 25;
+            state ^= state >> 27;
+            state.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        };
+        let mut compared = 0;
+        for _ in 0..150 {
+            let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(80, 80)));
+            for _ in 0..(next() % 6 + 2) {
+                let x = (next() % 70) as i64;
+                let y = (next() % 70) as i64;
+                let w = (next() % 10 + 1) as i64;
+                let h = (next() % 10 + 1) as i64;
+                o.add_rect(p(x, y), p(x + w, y + h));
+            }
+            for _ in 0..(next() % 5) {
+                let x = (next() % 80) as i64;
+                let y = (next() % 80) as i64;
+                let l = (next() % 25) as i64;
+                if next() % 2 == 0 {
+                    o.add_segment(Segment::horizontal(y, x, (x + l).min(80)));
+                } else {
+                    o.add_segment(Segment::vertical(x, y, (y + l).min(80)));
+                }
+            }
+            let mut free = |o: &ObstacleSet| loop {
+                let q = p((next() % 81) as i64, (next() % 81) as i64);
+                if o.is_free_point(q) {
+                    return q;
+                }
+            };
+            let (a, b) = (free(&o), free(&o));
+            let raw = route_with(
+                &o,
+                a,
+                b,
+                &RouterConfig {
+                    improve: Improvement::None,
+                    ..Default::default()
+                },
+            );
+            let Some(raw) = raw.path else { continue };
+            let mut fast = raw.clone();
+            let mut slow = raw.clone();
+            let changed_fast = improve_probe(&o, &mut fast);
+            let changed_slow = improve_probe_exhaustive(&o, &mut slow);
+            assert_eq!(fast, slow, "scene {a:?}->{b:?}");
+            assert_eq!(changed_fast, changed_slow);
+            compared += 1;
+        }
+        assert!(compared > 100);
+    }
 
     fn p(x: i64, y: i64) -> Point {
         Point::new(x, y)

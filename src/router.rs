@@ -110,10 +110,11 @@ pub enum Improvement {
     /// Only the collinear cleanup; the path may contain visible detours.
     None,
     /// Cleanup plus the segment-extension shortcut (paper Fig. 10 → 11).
-    #[default]
     ExtensionOnly,
     /// `ExtensionOnly` plus perpendicular probing along every segment
-    /// (paper Fig. 8 → 9). Removes staircases, costs more time.
+    /// (paper Fig. 8 → 9). Removes staircases and the wall-to-wall zigzags
+    /// that Process II leaves behind in corridors. Default.
+    #[default]
     Full,
 }
 
@@ -151,7 +152,7 @@ impl Default for RouterConfig {
     fn default() -> Self {
         RouterConfig {
             max_steps: 10_000,
-            improve: Improvement::ExtensionOnly,
+            improve: Improvement::Full,
             boundary_retreat: false,
             recursive_retreat: true,
         }

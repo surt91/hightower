@@ -46,7 +46,7 @@
 <circle cx="72.0" cy="273.6" r="3" fill="#1f6fd6"/>
 <circle cx="355.2" cy="379.2" r="3" fill="#2a9d5c"/>
 <circle cx="33.6" cy="273.6" r="3" fill="#1f6fd6"/>
-<polyline points="196.8,273.6 196.8,379.2 355.2,379.2 355.2,398.4 316.8,398.4" fill="none" stroke="#d62828" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" />
+<polyline points="196.8,273.6 196.8,379.2 316.8,379.2 316.8,398.4" fill="none" stroke="#d62828" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" />
 <circle cx="196.8" cy="379.2" r="6.6000000000000005" fill="none" stroke="#f28c28" stroke-width="2.5"/>
 <circle cx="196.8" cy="273.6" r="4.5" fill="#111111"/>
 <circle cx="316.8" cy="398.4" r="4.5" fill="#111111"/>

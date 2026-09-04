@@ -546,3 +546,87 @@ fn pert_mode_corners_may_be_crossed_but_not_used() {
     assert!(!third.iter().any(|c| *c == p(10, 50)), "{third:?}");
     assert!(third.len() >= 4, "{third:?}");
 }
+
+/// Process II retreats from the far end of every line, so the raw path in a
+/// corridor bounces from wall to wall. The default improvement must remove
+/// those zigzags: on Hightower's own Hampton Court maze the final path is
+/// within 10 % of the shortest one (it is currently equal to it).
+#[test]
+fn hampton_court_path_is_close_to_shortest() {
+    const DATA: &str = include_str!("../examples/data/hampton_court.txt");
+    let mut grid = (0, 0);
+    let (mut a, mut b) = (p(0, 0), p(0, 0));
+    let mut walls = Vec::new();
+    for line in DATA.lines() {
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let n = |i: usize| f[i].parse::<i64>().expect("integer");
+        match f.first().copied() {
+            Some("#") if f.get(1) == Some(&"grid") => grid = (n(2), n(3)),
+            Some("h") => walls.push(Segment::horizontal(n(1), n(2), n(3))),
+            Some("v") => walls.push(Segment::vertical(n(1), n(2), n(3))),
+            Some("A") => a = p(n(1), n(2)),
+            Some("B") => b = p(n(1), n(2)),
+            _ => {}
+        }
+    }
+    let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(grid.0, grid.1)));
+    for w in walls {
+        o.add_segment(w);
+    }
+    let len = |path: &[Point]| path.windows(2).map(|w| w[0].manhattan(w[1])).sum::<i64>();
+    let shortest = hightower::route_visibility(&o, a, b).expect("maze is solvable");
+    let r = route_with(&o, a, b, &RouterConfig::default());
+    let path = r.path.expect("line search solves the maze");
+    validate_path(&o, a, b, &path).unwrap();
+    assert!(
+        len(&path) * 10 <= len(&shortest) * 11,
+        "maze path {} vs shortest {}",
+        len(&path),
+        len(&shortest)
+    );
+    // and it leaves A towards the exit on the left, as Hightower's plot does
+    assert!(
+        path[1].x <= a.x || path[1].y != a.y,
+        "first move {:?}",
+        path[1]
+    );
+}
+
+/// A serpentine corridor forces several Process II retreats; the default
+/// improvement must still deliver a path close to the shortest one.
+#[test]
+fn serpentine_corridor_path_is_close_to_shortest() {
+    let mut o = arena();
+    // horizontal baffles from alternating sides leave a 10-unit gap at the end
+    for (i, y) in (15..100).step_by(15).enumerate() {
+        if i % 2 == 0 {
+            o.add_segment(Segment::horizontal(y, 0, 88));
+        } else {
+            o.add_segment(Segment::horizontal(y, 12, 100));
+        }
+    }
+    let (a, b) = (p(5, 5), p(95, 95));
+    let len = |path: &[Point]| path.windows(2).map(|w| w[0].manhattan(w[1])).sum::<i64>();
+    let shortest = hightower::route_visibility(&o, a, b).expect("solvable");
+    let r = route_with(&o, a, b, &RouterConfig::default());
+    let path = r.path.expect("line search threads the serpentine");
+    validate_path(&o, a, b, &path).unwrap();
+    assert!(
+        len(&path) * 10 <= len(&shortest) * 11,
+        "path {} vs shortest {}",
+        len(&path),
+        len(&shortest)
+    );
+    // the full improvement is the default because of exactly this effect
+    assert_eq!(RouterConfig::default().improve, Improvement::Full);
+    let ext = route_with(
+        &o,
+        a,
+        b,
+        &RouterConfig {
+            improve: Improvement::ExtensionOnly,
+            ..Default::default()
+        },
+    );
+    assert!(len(ext.path.as_deref().unwrap()) >= len(&path));
+}

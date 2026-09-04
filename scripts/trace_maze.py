@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-SCALE = 4.0  # pixels per unit; corridors are ~22 px, so ~5 units wide
+SCALE = float(sys.argv[3]) if len(sys.argv) > 3 else 7.0  # pixels per unit; corridors are ~22 px, so ~3 units wide
 
 src = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/hc-000.png")
 out = Path(sys.argv[2] if len(sys.argv) > 2 else "examples/data/hampton_court.txt")
