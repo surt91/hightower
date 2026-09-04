@@ -202,3 +202,40 @@ fn already_routed_paths_can_become_obstacles() {
         }
     }
 }
+
+/// A scene found by `examples/counterexample.rs`: B sits in a box with a
+/// one-unit gap; the only route runs around the left of the box. With the
+/// paper's Process II (no retreat from boundary ends) the router misses the
+/// path; with `boundary_retreat` it finds it. This documents the
+/// incompleteness, it is not a bug.
+#[test]
+fn s9b_known_miss_and_boundary_retreat() {
+    let mut o = ObstacleSet::new(Bounds::new(p(0, 0), p(60, 60)));
+    o.add_segment(Segment::horizontal(8, 3, 56));
+    o.add_segment(Segment::horizontal(27, 43, 60));
+    o.add_segment(Segment::horizontal(45, 3, 56));
+    o.add_segment(Segment::vertical(3, 8, 45));
+    o.add_segment(Segment::vertical(7, 49, 60));
+    o.add_segment(Segment::vertical(56, 8, 15));
+    o.add_segment(Segment::vertical(56, 17, 45));
+    let (a, b) = (p(23, 55), p(42, 12));
+    assert!(
+        hightower::grid::route_grid(&o, a, b).is_some(),
+        "the path exists"
+    );
+    let paper = route_with(&o, a, b, &RouterConfig::default());
+    assert_eq!(paper.outcome, Outcome::NoEscape);
+    let retreat = route_with(
+        &o,
+        a,
+        b,
+        &RouterConfig {
+            boundary_retreat: true,
+            ..Default::default()
+        },
+    );
+    let path = retreat
+        .path
+        .expect("boundary retreat finds the way around the box");
+    validate_path(&o, a, b, &path).unwrap();
+}

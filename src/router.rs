@@ -124,6 +124,15 @@ pub struct RouterConfig {
     pub max_steps: usize,
     /// Post-processing of the found path.
     pub improve: Improvement,
+    /// Let Escape Process II also retreat from escape-line ends that lie on
+    /// the bounding box, not only from ends stopped by a cover.
+    ///
+    /// The paper only retreats from covers. That keeps the number of probe
+    /// lines small in open scenes, but a network whose lines reach the box
+    /// on all sides gives up immediately, which makes the router miss more
+    /// paths. Enabling this finds more paths at the price of many probe
+    /// lines in open scenes (up to one per unit of the bounding box).
+    pub boundary_retreat: bool,
 }
 
 impl Default for RouterConfig {
@@ -131,6 +140,7 @@ impl Default for RouterConfig {
         RouterConfig {
             max_steps: 10_000,
             improve: Improvement::ExtensionOnly,
+            boundary_retreat: false,
         }
     }
 }
@@ -238,7 +248,7 @@ pub fn route_with(
             point,
             line_here,
             line_other,
-        } = escape_step(obstacles, net, other, &mut trace)
+        } = escape_step(obstacles, net, other, config, &mut trace)
         {
             let (la, lb) = if current == 0 {
                 (line_here, line_other)
@@ -345,6 +355,7 @@ pub(crate) fn escape_step(
     obstacles: &ObstacleSet,
     net: &mut Network,
     other: &Network,
+    config: &RouterConfig,
     trace: &mut Trace,
 ) -> StepResult {
     let (z_id, z) = net.object_point();
@@ -381,7 +392,15 @@ pub(crate) fn escape_step(
         });
         return StepResult::Continue;
     }
-    match process_ii(obstacles, net, other, z_id, z, trace) {
+    match process_ii(
+        obstacles,
+        net,
+        other,
+        z_id,
+        z,
+        config.boundary_retreat,
+        trace,
+    ) {
         ProcessOutcome::Escaped => StepResult::Continue,
         ProcessOutcome::Intersection {
             point,

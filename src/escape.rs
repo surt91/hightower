@@ -97,8 +97,10 @@ pub(crate) enum ProcessOutcome {
 
 /// Escape Process II at object point `z` (tree node `z_id`).
 ///
-/// The four ends of `z`'s escape lines walk back toward `z` one unit at a
-/// time, round-robin. At every position `r` whose perpendicular escape line is
+/// The ends of `z`'s escape lines that are bounded by a cover walk back toward
+/// `z` one unit at a time, round-robin. Ends on the bounding box are skipped
+/// as in the paper, unless `boundary_retreat` is set (see
+/// [`RouterConfig::boundary_retreat`](crate::RouterConfig::boundary_retreat)). At every position `r` whose perpendicular escape line is
 /// still unused, that line is constructed and tested against the other
 /// network; then Process I is tried *at `r`*. If it succeeds, `r` and the
 /// Process I point both become escape points (in that order).
@@ -108,15 +110,28 @@ pub(crate) fn process_ii(
     other: &Network,
     z_id: usize,
     z: Point,
+    boundary_retreat: bool,
     trace: &mut Trace,
 ) -> ProcessOutcome {
     let v = obstacles.escape_line(z, Orientation::Vertical);
     let h = obstacles.escape_line(z, Orientation::Horizontal);
+    let bounds = obstacles.bounds();
+    // The paper defines r_i as the intersection of an escape line with the
+    // cover that bounds it. An end that lies on the bounding box has no cover
+    // and therefore no retreat position unless `boundary_retreat` is set; we
+    // mark such ends as exhausted (== z).
+    let end = |point: Point, on_boundary: bool| {
+        if on_boundary && !boundary_retreat {
+            z
+        } else {
+            point
+        }
+    };
     let mut r = [
-        Point::new(z.x, v.to),   // top end
-        Point::new(h.to, z.y),   // right end
-        Point::new(z.x, v.from), // bottom end
-        Point::new(h.from, z.y), // left end
+        end(Point::new(z.x, v.to), v.to == bounds.max.y), // top end
+        end(Point::new(h.to, z.y), h.to == bounds.max.x), // right end
+        end(Point::new(z.x, v.from), v.from == bounds.min.y), // bottom end
+        end(Point::new(h.from, z.y), h.from == bounds.min.x), // left end
     ];
     // Orientation of the new line through r[i]: perpendicular to the line it sits on.
     const NEW: [Orientation; 4] = [
