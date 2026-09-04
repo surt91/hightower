@@ -409,8 +409,8 @@ impl eframe::App for App {
         let stats = Stats {
             outcome: match result.outcome {
                 Outcome::Found => "path found",
-                Outcome::NoEscape => "no escape (both networks stuck)",
-                Outcome::StepLimit => "step limit reached",
+                Outcome::NoEscape => "no escape",
+                Outcome::StepLimit => "step limit",
                 Outcome::InvalidInput => "invalid input",
             },
             steps: result.steps,
@@ -423,8 +423,10 @@ impl eframe::App for App {
                 Some("A or B touches an obstacle; move it to free ground.")
             } else if result.outcome == Outcome::NoEscape && shortest.is_some() {
                 Some(
-                    "A path exists, but Hightower's used-line rule blocks it (see the article's blind spot).",
+                    "Both networks ran out of escape lines although a path exists: the used-line rule blocks it (the blind spot).",
                 )
+            } else if result.outcome == Outcome::NoEscape {
+                Some("Both networks ran out of escape lines; A or B is walled in.")
             } else {
                 None
             },
