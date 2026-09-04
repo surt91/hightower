@@ -17,6 +17,8 @@ const DATA: &str = include_str!("data/hampton_court.txt");
 
 struct Maze {
     obstacles: ObstacleSet,
+    /// Hightower's plotted path, kept for comparisons.
+    #[allow(dead_code)]
     paper_path: Vec<Segment>,
     a: Point,
     b: Point,
@@ -71,13 +73,7 @@ fn main() {
 
     let (result, median) = timed(&maze, &RouterConfig::default());
     report(&result, median);
-    draw(
-        &maze,
-        &result,
-        median,
-        "out/maze.svg",
-        "(gray: the path plotted in 1969, red: this implementation)",
-    );
+    draw(&maze, &result, median, "out/maze.svg", "");
     fs::write("out/maze_trace.svg", String::new()).ok();
     draw_trace(&maze, &result, "out/maze_trace.svg");
 }
@@ -118,7 +114,7 @@ fn report(result: &hightower::RouteResult, median: Duration) {
     );
 }
 
-/// Draws the maze, Hightower's 1969 path in gray, our networks and path.
+/// Draws the maze and our path (or the stuck networks).
 fn draw(maze: &Maze, result: &hightower::RouteResult, median: Duration, file: &str, note: &str) {
     let bounds = maze.obstacles.bounds();
     // 68 units on 900 px: one unit of clearance is 13 px.
@@ -133,9 +129,6 @@ fn draw(maze: &Maze, result: &hightower::RouteResult, median: Duration, file: &s
     };
     let mut c = Canvas::new(bounds, style.clone());
     c.frame();
-    for s in &maze.paper_path {
-        c.segment(s, "#d9d9d9", style.path_width * 2.5, "");
-    }
     c.obstacles(&maze.obstacles);
     if let Some(path) = &result.path {
         c.polyline(path, style.path, style.path_width, "");
@@ -160,7 +153,9 @@ fn draw(maze: &Maze, result: &hightower::RouteResult, median: Duration, file: &s
         },
     );
     mono(&mut c, 64.0, &format!("TOTAL TIME {}", hours(median)));
-    mono(&mut c, 84.0, note);
+    if !note.is_empty() {
+        mono(&mut c, 84.0, note);
+    }
     fs::write(file, c.finish()).expect("write svg");
     println!("wrote {file}");
 }
