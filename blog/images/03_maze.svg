@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="756" height="576" viewBox="0 0 756 576">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<rect x="18.0" y="18.0" width="720.0" height="540.0" fill="none" stroke="#bbbbbb" stroke-width="1"/>
+<line x1="30.0" y1="546.0" x2="354.0" y2="546.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="402.0" y1="546.0" x2="726.0" y2="546.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="258.0" y1="516.0" x2="498.0" y2="516.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="90.0" y1="486.0" x2="666.0" y2="486.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="378.0" y1="456.0" x2="666.0" y2="456.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="150.0" y1="426.0" x2="606.0" y2="426.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="150.0" y1="396.0" x2="318.0" y2="396.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="210.0" y1="366.0" x2="474.0" y2="366.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="522.0" y1="366.0" x2="546.0" y2="366.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="210.0" y1="288.0" x2="378.0" y2="288.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="210.0" y1="210.0" x2="546.0" y2="210.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="198.0" y1="150.0" x2="606.0" y2="150.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="90.0" y1="120.0" x2="318.0" y2="120.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="90.0" y1="90.0" x2="666.0" y2="90.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="30.0" y1="30.0" x2="726.0" y2="30.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="30.0" y1="546.0" x2="30.0" y2="30.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="60.0" y1="318.0" x2="60.0" y2="30.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="90.0" y1="486.0" x2="90.0" y2="90.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="120.0" y1="318.0" x2="120.0" y2="90.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="150.0" y1="426.0" x2="150.0" y2="150.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="210.0" y1="366.0" x2="210.0" y2="210.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="318.0" y1="426.0" x2="318.0" y2="396.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="378.0" y1="486.0" x2="378.0" y2="456.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="438.0" y1="366.0" x2="438.0" y2="288.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="546.0" y1="366.0" x2="546.0" y2="210.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="576.0" y1="426.0" x2="576.0" y2="258.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="606.0" y1="426.0" x2="606.0" y2="150.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="666.0" y1="486.0" x2="666.0" y2="318.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="666.0" y1="270.0" x2="666.0" y2="90.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="696.0" y1="546.0" x2="696.0" y2="198.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<line x1="726.0" y1="546.0" x2="726.0" y2="30.0" stroke="#111111" stroke-width="4" stroke-linecap="round" />
+<polyline points="378.0,558.0 378.0,522.0 672.0,522.0 672.0,276.0 612.0,276.0 612.0,144.0 156.0,144.0 156.0,390.0 480.0,390.0 480.0,282.0 384.0,282.0 384.0,318.0 318.0,318.0" fill="none" stroke="#d62828" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" />
+<circle cx="378.0" cy="558.0" r="4.5" fill="#111111"/>
+<circle cx="318.0" cy="318.0" r="4.5" fill="#111111"/>
+<text x="361.5" y="550.5" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#111111">A</text>
+<text x="326.5" y="310.5" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#111111">B</text>
+</svg>
